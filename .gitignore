@@ -1,0 +1,25 @@
+# dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# test reports
+/reports/
+/coverage/
+
+# env files (never commit secrets)
+.env*
+!.env.example
+
+# Vercel
+.vercel
+
+# OS / editor
+.DS_Store
+Thumbs.db
+npm-debug.log*

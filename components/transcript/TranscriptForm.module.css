@@ -1,0 +1,125 @@
+/* Neutral starter styles. Colors meet WCAG 2.2 AA contrast on white (4.5:1 text, 3:1 UI). */
+
+.wrapper {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 48rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #8a5a00;
+  background: #fff8e6;
+  color: #3d2a00;
+}
+
+.form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.hint,
+.counter {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #4a4a4a;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 12rem;
+  padding: 0.75rem;
+  border: 1px solid #6b6b6b;
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.textarea[aria-invalid="true"] {
+  border: 2px solid #b3261e;
+}
+
+.file {
+  font: inherit;
+}
+
+.textarea:focus-visible,
+.file:focus-visible,
+.button:focus-visible,
+.json:focus-visible,
+.error:focus-visible,
+.resultHeading:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.error {
+  padding: 0.75rem 1rem;
+  border: 2px solid #b3261e;
+  border-radius: 6px;
+  background: #fdecea;
+  color: #8c1d18;
+}
+
+.button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  background: #5a6b8c;
+  cursor: progress;
+}
+
+.result {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.resultHeading {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.disclaimer {
+  margin: 0;
+  font-weight: 600;
+  color: #8c1d18;
+}
+
+.json {
+  margin: 0;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 1rem;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #1a1a1a;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition: background-color 120ms ease;
+  }
+}
