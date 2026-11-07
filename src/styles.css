@@ -283,3 +283,12 @@ p { margin: 0; }
   .print-only { display: block !important; }
 }
 .print-only { display: none; }
+
+/* Visit transcript ("In the room") */
+.turns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.turn { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-muted); overflow-wrap: anywhere; }
+.turn--you { background: var(--primary-tint); }
+.turn--note { background: none; padding: 0 2px; }
+.turn__speaker { font-weight: 600; font-size: 0.9rem; }
+.json { margin: 8px 0 0; max-height: 320px; overflow: auto; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-muted); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8rem; }
+details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }

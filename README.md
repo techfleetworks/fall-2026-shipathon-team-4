@@ -11,6 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # production build + service worker (dist/)
 npm run preview    # serve the production build, installable as a PWA
+npm test           # unit tests (Vitest) + Gherkin scenarios (Cucumber)
 ```
 
 On the landing page, **Explore with demo data (Theo, synthetic)** loads a seeded case with a medication change, a dismissive visit and an upcoming visit.
@@ -27,6 +28,7 @@ On the landing page, **Explore with demo data (Theo, synthetic)** loads a seeded
 | PDF | "Export as PDF" opens the doctor view and the browser print dialog, styled with print CSS. |
 | Sharing | Uses the native share sheet, or copies plain text to the clipboard. Secure share links need accounts and a backend. |
 | Reminders | Shown in-app on Home. Push notifications need a backend. |
+| In the room | Paste or upload (`.txt`) what was said at a visit (Visits → a past visit → "Add what was said in the room"). Crisis check first, then cleaned, split into speaker turns, reviewed and saved to the visit. Demo mode can load Theo's Starter Pack transcript. See `docs/adr/ADR-002-visit-transcript-intake.md`. |
 
 ## Screens
 
@@ -36,5 +38,5 @@ Landing · Onboarding (who / what brings you / privacy & consent / name / next v
 
 - Express API + Claude for the follow-up questions, the SOCRATES summary, the after-visit summary and the lab/note explainer. Swap `translateStory()` for the API call, and keep the rule-based version as the fallback.
 - Supabase auth + storage (RLS, hard delete), then real share links and push reminders.
-- "In the room" transcript paste/upload and the after-visit summary (F5/F8), plus the lab/note explainer (F9).
+- After-visit summary and action items from the saved visit transcript (F5/F8), plus the lab/note explainer (F9).
 - Clinical and PM review of the script and playbook copy (`src/data/`).

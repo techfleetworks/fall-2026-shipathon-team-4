@@ -1,3 +1,5 @@
+import type { TranscriptPayload } from './transcript/types';
+
 export type ForWhom = 'myself' | 'someone';
 export type Reason = 'Low mood' | 'Worry' | 'Both' | 'Not sure';
 
@@ -73,6 +75,8 @@ export interface Visit {
   priorities: string[];
   askingFor: string[];
   checkIn?: CheckIn;
+  /** What was said in the room, saved by the patient after review ("In the room" step). */
+  transcript?: TranscriptPayload;
 }
 
 export interface SharedTip {
