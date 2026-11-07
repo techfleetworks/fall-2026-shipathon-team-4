@@ -1,0 +1,1171 @@
+[
+  {
+    "description": "  So that later features can analyze a visit transcript\n  As a patient advocate using the prototype\n  I want to submit a transcript and get back a structured, clearly labelled payload",
+    "elements": [
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;pasted-transcript-is-accepted-with-metadata-and-the-safety-disclaimer",
+        "keyword": "Scenario",
+        "line": 14,
+        "name": "Pasted transcript is accepted with metadata and the safety disclaimer",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 14437199
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "the transcript text \"Doctor: How are you feeling?\\r\\nPatient: Tired.\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 1927799
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 173799
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 17,
+            "name": "the submission succeeds with source \"paste\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:70"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 83399
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 18,
+            "name": "the payload transcript is \"Doctor: How are you feeling?\\nPatient: Tired.\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:74"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 208799
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 19,
+            "name": "the payload has a UUID id and an ISO 8601 receivedAt timestamp",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:78"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 78800
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the payload disclaimer is exactly \"Synthetic - illustrative only, not medical advice\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:84"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 13
+          },
+          {
+            "name": "@usecase:paste-happy-path",
+            "line": 13
+          },
+          {
+            "name": "@category:happy",
+            "line": 13
+          },
+          {
+            "name": "@quality:functional",
+            "line": 13
+          },
+          {
+            "name": "@severity:critical",
+            "line": 13
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;uploaded-.txt-transcript-is-accepted",
+        "keyword": "Scenario",
+        "line": 23,
+        "name": "Uploaded .txt transcript is accepted",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 315400
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 24,
+            "name": "an uploaded file \"visit.txt\" containing \"Patient: My chest hurts.\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:44"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 316800
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 25,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 60600
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 26,
+            "name": "the submission succeeds with source \"upload\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:70"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 55600
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 27,
+            "name": "the payload disclaimer is exactly \"Synthetic - illustrative only, not medical advice\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:84"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 22
+          },
+          {
+            "name": "@usecase:upload-happy-path",
+            "line": 22
+          },
+          {
+            "name": "@category:happy",
+            "line": 22
+          },
+          {
+            "name": "@quality:functional",
+            "line": 22
+          },
+          {
+            "name": "@severity:critical",
+            "line": 22
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;empty-or-whitespace-only-transcript-is-rejected",
+        "keyword": "Scenario Outline",
+        "line": 37,
+        "name": "Empty or whitespace-only transcript is rejected",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 57199
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 31,
+            "name": "the transcript text \"\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 129599
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 32,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 77099
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 33,
+            "name": "the submission fails with code \"EMPTY\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 29
+          },
+          {
+            "name": "@usecase:empty-input",
+            "line": 29
+          },
+          {
+            "name": "@category:negative",
+            "line": 29
+          },
+          {
+            "name": "@quality:functional",
+            "line": 29
+          },
+          {
+            "name": "@severity:high",
+            "line": 29
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;empty-or-whitespace-only-transcript-is-rejected",
+        "keyword": "Scenario Outline",
+        "line": 38,
+        "name": "Empty or whitespace-only transcript is rejected",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 83499
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 31,
+            "name": "the transcript text \"\\s\\s\\s\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 78399
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 32,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 26499
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 33,
+            "name": "the submission fails with code \"EMPTY\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 29
+          },
+          {
+            "name": "@usecase:empty-input",
+            "line": 29
+          },
+          {
+            "name": "@category:negative",
+            "line": 29
+          },
+          {
+            "name": "@quality:functional",
+            "line": 29
+          },
+          {
+            "name": "@severity:high",
+            "line": 29
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;empty-or-whitespace-only-transcript-is-rejected",
+        "keyword": "Scenario Outline",
+        "line": 39,
+        "name": "Empty or whitespace-only transcript is rejected",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 44800
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 31,
+            "name": "the transcript text \"\n\\t\n\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 64799
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 32,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 18599
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 33,
+            "name": "the submission fails with code \"EMPTY\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 29
+          },
+          {
+            "name": "@usecase:empty-input",
+            "line": 29
+          },
+          {
+            "name": "@category:negative",
+            "line": 29
+          },
+          {
+            "name": "@quality:functional",
+            "line": 29
+          },
+          {
+            "name": "@severity:high",
+            "line": 29
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;transcript-at-the-limit-is-accepted-and-one-character-over-is-rejected",
+        "keyword": "Scenario",
+        "line": 42,
+        "name": "Transcript at the limit is accepted and one character over is rejected",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 66299
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 43,
+            "name": "a transcript of exactly 200000 characters",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:31"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 373699
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 44,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 286300
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 45,
+            "name": "the submission succeeds with source \"paste\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:70"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 33999
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 46,
+            "name": "a transcript of exactly 200001 characters",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:31"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 310099
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 47,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 27500
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 48,
+            "name": "the submission fails with code \"TOO_LONG\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 41
+          },
+          {
+            "name": "@usecase:too-long",
+            "line": 41
+          },
+          {
+            "name": "@category:boundary",
+            "line": 41
+          },
+          {
+            "name": "@quality:reliability",
+            "line": 41
+          },
+          {
+            "name": "@severity:high",
+            "line": 41
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;pasting-text-and-uploading-a-file-at-the-same-time-is-rejected-with-guidance",
+        "keyword": "Scenario",
+        "line": 51,
+        "name": "Pasting text and uploading a file at the same time is rejected with guidance",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 37799
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 52,
+            "name": "the transcript text \"Doctor: Hello\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 114300
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 53,
+            "name": "an uploaded file \"visit.txt\" containing \"Patient: Hi\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:44"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 66499
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 54,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 22199
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 55,
+            "name": "the submission fails with code \"BOTH_PROVIDED\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@audience:anonymous-user",
+            "line": 50
+          },
+          {
+            "name": "@usecase:both-provided",
+            "line": 50
+          },
+          {
+            "name": "@category:negative",
+            "line": 50
+          },
+          {
+            "name": "@quality:usability",
+            "line": 50
+          },
+          {
+            "name": "@severity:medium",
+            "line": 50
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;non-.txt-upload-is-rejected-by-extension-allow-list",
+        "keyword": "Scenario",
+        "line": 58,
+        "name": "Non-.txt upload is rejected by extension allow-list",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 69799
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 59,
+            "name": "an uploaded file \"payload.html\" containing \"<script>alert(1)</script>\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:44"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 106999
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 60,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 19999
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 61,
+            "name": "the submission fails with code \"FILE_TYPE\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 57
+          },
+          {
+            "name": "@owasp:file-upload",
+            "line": 57
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 57
+          },
+          {
+            "name": "@usecase:upload-wrong-type",
+            "line": 57
+          },
+          {
+            "name": "@category:security",
+            "line": 57
+          },
+          {
+            "name": "@quality:security",
+            "line": 57
+          },
+          {
+            "name": "@severity:high",
+            "line": 57
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;binary-file-renamed-to-.txt-is-rejected-by-content-check",
+        "keyword": "Scenario",
+        "line": 64,
+        "name": "Binary file renamed to .txt is rejected by content check",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 94699
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 65,
+            "name": "an uploaded file \"image.txt\" with binary bytes",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:48"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 185099
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 66,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 28400
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 67,
+            "name": "the submission fails with code \"FILE_NOT_TEXT\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 63
+          },
+          {
+            "name": "@owasp:file-upload",
+            "line": 63
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 63
+          },
+          {
+            "name": "@usecase:upload-binary-disguised",
+            "line": 63
+          },
+          {
+            "name": "@category:security",
+            "line": 63
+          },
+          {
+            "name": "@quality:security",
+            "line": 63
+          },
+          {
+            "name": "@severity:high",
+            "line": 63
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;oversized-upload-is-rejected-before-it-is-read",
+        "keyword": "Scenario",
+        "line": 70,
+        "name": "Oversized upload is rejected before it is read",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 456500
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 71,
+            "name": "an uploaded file \"huge.txt\" of 600000 bytes",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:53"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 52300
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 72,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 19099
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 73,
+            "name": "the submission fails with code \"FILE_TOO_LARGE\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 69
+          },
+          {
+            "name": "@owasp:denial-of-service",
+            "line": 69
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 69
+          },
+          {
+            "name": "@usecase:upload-oversized",
+            "line": 69
+          },
+          {
+            "name": "@category:security",
+            "line": 69
+          },
+          {
+            "name": "@quality:security",
+            "line": 69
+          },
+          {
+            "name": "@severity:high",
+            "line": 69
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;a-direct-call-with-a-malformed-field-is-rejected-by-server-side-validation",
+        "keyword": "Scenario",
+        "line": 76,
+        "name": "A direct call with a malformed field is rejected by server-side validation",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 76000
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 77,
+            "name": "a direct request with a file placed in the text field",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:57"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 46900
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 78,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 21100
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 79,
+            "name": "the submission fails with code \"INVALID_INPUT\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 75
+          },
+          {
+            "name": "@owasp:nextjs",
+            "line": 75
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 75
+          },
+          {
+            "name": "@usecase:server-action-direct-call",
+            "line": 75
+          },
+          {
+            "name": "@category:security",
+            "line": 75
+          },
+          {
+            "name": "@quality:security",
+            "line": 75
+          },
+          {
+            "name": "@severity:critical",
+            "line": 75
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;error-messages-never-echo-transcript-content",
+        "keyword": "Scenario",
+        "line": 82,
+        "name": "Error messages never echo transcript content",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 154400
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 83,
+            "name": "a transcript of exactly 200001 characters containing the marker \"PATIENT-SECRET\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:36"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 238699
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 84,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 23199
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 85,
+            "name": "the submission fails with code \"TOO_LONG\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:88"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 91800
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 86,
+            "name": "the error message does not contain \"PATIENT-SECRET\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:93"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 81
+          },
+          {
+            "name": "@owasp:error-handling",
+            "line": 81
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 81
+          },
+          {
+            "name": "@usecase:error-no-leak",
+            "line": 81
+          },
+          {
+            "name": "@category:security",
+            "line": 81
+          },
+          {
+            "name": "@quality:privacy",
+            "line": 81
+          },
+          {
+            "name": "@severity:high",
+            "line": 81
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "accept-a-pasted-or-uploaded-transcript;control-characters-are-stripped-from-the-transcript",
+        "keyword": "Scenario",
+        "line": 89,
+        "name": "Control characters are stripped from the transcript",
+        "steps": [
+          {
+            "result": {
+              "status": "passed",
+              "duration": 47199
+            },
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 90,
+            "name": "the transcript text \"Doctor:\\u0000 Hi\\u001b[31m\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:27"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 80000
+            },
+            "arguments": [],
+            "keyword": "When ",
+            "line": 91,
+            "name": "the transcript is submitted",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:61"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 45099
+            },
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 92,
+            "name": "the submission succeeds with source \"paste\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:70"
+            }
+          },
+          {
+            "result": {
+              "status": "passed",
+              "duration": 28500
+            },
+            "arguments": [],
+            "keyword": "And ",
+            "line": 93,
+            "name": "the payload transcript is \"Doctor: Hi[31m\"",
+            "match": {
+              "location": "features\\step_definitions\\transcript.steps.ts:74"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@feature:transcript-intake",
+            "line": 7
+          },
+          {
+            "name": "@security",
+            "line": 88
+          },
+          {
+            "name": "@owasp:input-validation",
+            "line": 88
+          },
+          {
+            "name": "@audience:anonymous-attacker",
+            "line": 88
+          },
+          {
+            "name": "@usecase:control-characters",
+            "line": 88
+          },
+          {
+            "name": "@category:security",
+            "line": 88
+          },
+          {
+            "name": "@quality:security",
+            "line": 88
+          },
+          {
+            "name": "@severity:medium",
+            "line": 88
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "accept-a-pasted-or-uploaded-transcript",
+    "line": 8,
+    "keyword": "Feature",
+    "name": "Accept a pasted or uploaded transcript",
+    "tags": [
+      {
+        "name": "@feature:transcript-intake",
+        "line": 7
+      }
+    ],
+    "uri": "features\\transcript-intake.feature"
+  }
+]

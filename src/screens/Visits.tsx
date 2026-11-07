@@ -41,6 +41,7 @@ export function Visits() {
           {upcoming && <Link to="/brief" className="btn btn--sm">Open brief</Link>}
           {upcoming && <Link to="/today" className="btn btn--sm">Morning-of prep</Link>}
           {upcoming && upcoming.date <= todayISO() && <Link to={`/visits/${upcoming.id}/check-in`} className="btn btn--sm">Post-visit check-in</Link>}
+          {upcoming && upcoming.date <= todayISO() && <Link to={`/visits/${upcoming.id}/transcript`} className="btn btn--sm">What was said</Link>}
         </div>
       </section>
 
@@ -58,6 +59,11 @@ export function Visits() {
             <span>Felt heard {v.checkIn.feltHeard}/5 · {v.checkIn.nextSteps.join(', ')}</span>
           ) : (
             <Link to={`/visits/${v.id}/check-in`} className="btn btn--sm" style={{ alignSelf: 'flex-start' }}>Add check-in</Link>
+          )}
+          {v.date <= todayISO() && (
+            <Link to={`/visits/${v.id}/transcript`} className="btn btn--sm" style={{ alignSelf: 'flex-start' }}>
+              {v.transcript ? `What was said · ${v.transcript.stats.dialogueTurns} lines` : 'Add what was said in the room'}
+            </Link>
           )}
         </div>
       ))}

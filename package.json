@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "npm run test:unit && npm run test:bdd",
+    "test:unit": "vitest run",
+    "test:bdd": "node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -16,11 +19,14 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "13.3.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "4.23.15",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
-    "vite-plugin-pwa": "^0.21.1"
+    "vite-plugin-pwa": "^0.21.1",
+    "vitest": "3.2.7"
   }
 }

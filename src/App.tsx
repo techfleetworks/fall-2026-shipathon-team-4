@@ -12,6 +12,7 @@ import { AddEvidence, MyCase } from './screens/MyCase';
 import { Brief, DoctorView } from './screens/Brief';
 import { Breathing, CheckInDone, CheckInScreen, Escalation, FollowUpScreen, MorningPrep } from './screens/VisitDay';
 import { Visits } from './screens/Visits';
+import { VisitTranscript } from './screens/VisitTranscript';
 import { PracticeScript, Scripts } from './screens/Scripts';
 import { Peers, PlaybookDetail, ShareWhatHelped } from './screens/Peers';
 import { Settings } from './screens/Settings';
@@ -70,6 +71,7 @@ export function App() {
           <Route path="/visits" element={<Visits />} />
           <Route path="/visits/:id/check-in" element={<CheckInScreen />} />
           <Route path="/visits/:id/done" element={<CheckInDone />} />
+          <Route path="/visits/:id/transcript" element={<VisitTranscript />} />
           <Route path="/escalation" element={<Escalation />} />
           <Route path="/follow-up/:id" element={<FollowUpScreen />} />
           <Route path="/peers" element={<Peers />} />

@@ -18,6 +18,7 @@ import type {
   StoryDraft,
   Visit,
 } from './types';
+import type { TranscriptPayload } from './transcript/types';
 import { buildDemoState } from '../data/demo';
 
 export interface MorningPrep {
@@ -52,6 +53,7 @@ interface AppActions {
   updateVisit: (id: string, patch: Partial<Visit>) => void;
   deleteVisit: (id: string) => void;
   submitCheckIn: (visitId: string, c: CheckIn) => void;
+  saveVisitTranscript: (visitId: string, t: TranscriptPayload) => void;
   logFollowUp: (id: string, outcome: NonNullable<FollowUp['outcome']>) => void;
   toggleScript: (id: string) => void;
   addTip: (t: Omit<SharedTip, 'id' | 'createdAt'>) => void;
@@ -150,6 +152,26 @@ export const useApp = create<AppData & AppActions>()(
             visits: s.visits.map((v) => (v.id === visitId ? { ...v, checkIn: c } : v)),
             followUps: [...s.followUps, ...followUps],
             evidence: [...s.evidence, { id: uid(), date: visit?.date ?? todayISO(), type: 'visit', title: 'Visit', detail }],
+          };
+        }),
+
+      saveVisitTranscript: (visitId, t) =>
+        set((s) => {
+          const visit = s.visits.find((v) => v.id === visitId);
+          if (!visit) return {};
+          const who = t.speakers.length ? ` · ${t.speakers.join(', ')}` : '';
+          return {
+            visits: s.visits.map((v) => (v.id === visitId ? { ...v, transcript: t } : v)),
+            evidence: [
+              ...s.evidence,
+              {
+                id: uid(),
+                date: visit.date,
+                type: 'visit',
+                title: visit.transcript ? 'Visit transcript replaced' : 'Visit transcript',
+                detail: `${t.stats.dialogueTurns} lines of conversation saved${who}`,
+              },
+            ],
           };
         }),
 
