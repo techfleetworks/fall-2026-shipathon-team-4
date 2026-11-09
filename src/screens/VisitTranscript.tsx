@@ -187,9 +187,9 @@ function TranscriptView({ payload, you }: { payload: TranscriptPayload; you?: st
           ),
         )}
       </ol>
-      <details className="small">
+      <details className="small transcript-data">
         <summary>Show the data (JSON)</summary>
-        <pre className="json" tabIndex={0}>{JSON.stringify(payload, null, 2)}</pre>
+        <pre tabIndex={0}>{JSON.stringify(payload, null, 2)}</pre>
       </details>
     </section>
   );
