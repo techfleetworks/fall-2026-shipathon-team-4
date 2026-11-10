@@ -28,7 +28,7 @@ On the landing page, **Explore with demo data (Theo, synthetic)** loads a seeded
 | PDF | "Export as PDF" opens the doctor view and the browser print dialog, styled with print CSS. |
 | Sharing | Uses the native share sheet, or copies plain text to the clipboard. Secure share links need accounts and a backend. |
 | Reminders | Shown in-app on Home. Push notifications need a backend. |
-| In the room | Paste or upload (`.txt`) what was said at a visit (Visits → a past visit → "Add what was said in the room"). Crisis check first, then cleaned, split into speaker turns, reviewed and saved to the visit. Demo mode can load Theo's Starter Pack transcript. See `docs/adr/ADR-002-visit-transcript-intake.md`. |
+| In the room | Paste or upload (`.txt`) what was said at a visit (Visits → a past visit → "Add what was said in the room"). Crisis check first, then cleaned, split into speaker turns and reviewed. The transcript is **session-only** (`sessionStorage`, gone when the tab closes); My case keeps only a short note without the text. Demo mode can load Theo's Starter Pack transcript. See `docs/adr/ADR-002-visit-transcript-intake.md`. |
 
 ## Screens
 

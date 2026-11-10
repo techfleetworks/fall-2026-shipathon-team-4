@@ -27,8 +27,13 @@ so that approach was dropped.
   Flagged text goes to `/help/now`, is cleared from the screen, and is never built or saved.
 - Uploads are read on the device: `.txt` only, ≤ 512 KB, must decode as UTF-8 with no NUL bytes. The decoded
   text appears in the text box so the patient sees exactly what will be kept.
-- Nothing is saved until the patient reviews it and chooses "Save to this visit" (ADR-001 Decision 5).
-  It's stored on the visit (`Visit.transcript`) in `localStorage`, with a "Visit transcript" entry in My case.
+- **The raw transcript is session-only (ADR-001 Decision 5).** After review, "Add to this visit" holds it in
+  `useVisitTranscripts` (sessionStorage, keyed by visit), so a refresh keeps it and closing the tab discards it.
+  It is never written to `localStorage`. My case gets a short "Visit transcript reviewed" note with the line count
+  and speaker names only, no transcript text. "Remove it now" deletes it immediately; "Delete everything" clears it.
+  When `/visit-summary` exists, the approved after-visit summary is what gets kept, not the transcript.
+  (Revised Nov 9: the first version stored the transcript on the visit in `localStorage`, which conflicted with
+  ADR-001. A store migration (v2) removes any transcript saved by that build.)
 - The payload (`TranscriptPayload`) carries an ID, a timestamp, the source, stats, the detected speakers, the
   turns, the cleaned text and the synthetic label. It's the hand-off contract for the after-visit summary.
 - In demo mode, "Use Theo's sample transcript" loads the Starter Pack file verbatim (`src/data/sampleTranscript.ts`).
