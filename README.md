@@ -38,14 +38,14 @@ No authentication or rate limiting yet, so don't add endpoints that cost money (
 | Area | MVP choice |
 |---|---|
 | Stack | Vite + React 18 + TypeScript, React Router, Zustand, `vite-plugin-pwa` (offline app shell, installable) |
-| Data | **Local-only.** Approved records are stored in `localStorage`. The in-progress story draft is in `sessionStorage` and is discarded when the tab closes (ADR-001 Decision 5). No accounts. The API (below) exists but the app doesn't send it data yet. |
+| Data | **Local-only.** Approved records are stored in `localStorage`. The in-progress story draft is in `sessionStorage` and is discarded when the tab closes (ADR-001 Decision 5). No accounts. Visit transcripts are sent to the API (below) for processing and not stored there. |
 | Translation | **Rule-based** (`src/lib/translate.ts`), using the vocabulary from `translation_pairs.csv` plus the answers from the guided steps. Each clinical line keeps the patient's own words next to it, and anything missing reads "Not discussed". |
 | Safety | A keyword crisis check (`src/lib/safety.ts`) runs on every free-text input **before** translation. Flagged text is never saved, and the user is taken to 988 resources. It catches passive phrasing, including the Starter Pack safety fixture. |
 | Voice | "Hold to talk" uses the browser's Web Speech API where it's available (Chrome, Safari). Typing always works. |
 | PDF | "Export as PDF" opens the doctor view and the browser print dialog, styled with print CSS. |
 | Sharing | Uses the native share sheet, or copies plain text to the clipboard. Secure share links need accounts and a backend. |
 | Reminders | Shown in-app on Home. Push notifications need a backend. |
-| In the room | Paste or upload (`.txt`) what was said at a visit (Visits → a past visit → "Add what was said in the room"). Crisis check first, then cleaned, split into speaker turns and reviewed. The transcript is **session-only** (`sessionStorage`, gone when the tab closes); My case keeps only a short note without the text. Demo mode can load Theo's Starter Pack transcript. See `docs/adr/ADR-002-visit-transcript-intake.md`. |
+| In the room | Paste or upload (`.txt`) what was said at a visit (Visits → a past visit → "Add what was said in the room"). Processed by the **backend server** (`POST /api/transcripts`): crisis check first (also on the device, so crisis text is never sent), then cleaned and split into speaker turns, then reviewed. Locally, run `npm run dev:api` alongside `npm run dev`. The transcript is **session-only** (`sessionStorage`, gone when the tab closes); My case keeps only a short note without the text. Demo mode can load Theo's Starter Pack transcript. See `docs/adr/ADR-002-visit-transcript-intake.md`. |
 
 ## Screens
 

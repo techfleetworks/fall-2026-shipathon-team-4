@@ -48,8 +48,12 @@ features receive input that has already been validated and crisis-checked.
 - Bad: **no authentication and no rate limiting yet**. The API is public and stateless (stores nothing), so the
   risk is limited to abuse of compute. Add rate limiting (Vercel WAF or a store-backed limiter) before the AI
   endpoints ship, since those cost money per call.
-- The web app does not call the API yet; it still runs intake on the device (local-first). Switching it is a
-  separate product decision: it means transcript text leaves the device.
+- **The "In the room" screen uses the API** (decided Nov 9, matching ADR-001: raw inputs are "passed through
+  Express without logging"). `src/lib/api.ts` sends the transcript to `POST /api/transcripts` and the server
+  builds the payload. One check stays on the device first on purpose: crisis language is caught before
+  sending, so it never leaves the device; the server checks again. If the server can't be reached, the screen
+  says so and processes nothing (no silent on-device fallback). The onboarding privacy line was updated so it
+  no longer promises that nothing leaves the device.
 
 ## Security decision record
 
