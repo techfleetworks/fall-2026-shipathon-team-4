@@ -21,8 +21,9 @@ so that approach was dropped.
 
 ## Decision
 
-- Intake runs **in the browser**, in a framework-free module (`src/lib/transcript/`), called by a new screen
-  (`/visits/:id/transcript`) reachable from each past visit.
+- Intake logic lives in a framework-free module (`src/lib/transcript/`), used by a new screen
+  (`/visits/:id/transcript`) reachable from each past visit. *(Updated by ADR-003: the screen now sends the
+  transcript to the backend, `POST /api/transcripts`, which runs this module on the server.)*
 - Pipeline order: **type check → crisis check (`src/lib/safety.ts`) → clean and validate → build payload**.
   Flagged text goes to `/help/now`, is cleared from the screen, and is never built or saved.
 - Uploads are read on the device: `.txt` only, ≤ 512 KB, must decode as UTF-8 with no NUL bytes. The decoded

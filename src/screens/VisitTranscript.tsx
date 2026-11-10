@@ -6,11 +6,14 @@ import { THEO_SAMPLE_TRANSCRIPT } from '../data/sampleTranscript';
 import { formatDate } from '../lib/dates';
 import { useApp, useVisitTranscripts } from '../lib/store';
 import { MAX_TRANSCRIPT_CHARS, MAX_UPLOAD_BYTES } from '../lib/transcript/constants';
-import { decodeTranscriptFile, intakeError, processTranscript } from '../lib/transcript/intake';
-import type { IntakeError, TranscriptPayload, TranscriptSource } from '../lib/transcript/types';
+import { submitTranscriptToServer } from '../lib/api';
+import { hasCrisisLanguage } from '../lib/safety';
+import { decodeTranscriptFile, intakeError } from '../lib/transcript/intake';
+import type { TranscriptPayload, TranscriptSource } from '../lib/transcript/types';
 
 /** How long the transcript is kept, said plainly (ADR-001 Decision 5: raw transcripts are session-only). */
-const KEEP_NOTE = 'We keep the conversation only until you close this tab. It’s never saved to your case.';
+const KEEP_NOTE =
+  'Our server checks the conversation and doesn’t store it. On this device we keep it only until you close this tab. It’s never saved to your case.';
 
 /**
  * "In the room" step: the patient pastes or uploads what was said during a visit, checks it, and adds
@@ -29,7 +32,8 @@ export function VisitTranscript() {
 
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState<{ text: string; source: TranscriptSource } | null>(null);
-  const [error, setError] = useState<IntakeError | null>(null);
+  const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [review, setReview] = useState<TranscriptPayload | null>(null);
   const [replacing, setReplacing] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -64,17 +68,25 @@ export function VisitTranscript() {
     setLoaded({ text: THEO_SAMPLE_TRANSCRIPT, source: 'sample' });
   };
 
-  const onContinue = () => {
-    const outcome = processTranscript(text, source);
-    if (outcome.status === 'crisis') {
-      // Never keep flagged text: clear it and go straight to support.
-      setText('');
-      setLoaded(null);
-      navigate('/help/now', { replace: true });
-      return;
-    }
-    if (outcome.status === 'rejected') return setError(outcome.error);
+  const goToCrisisSupport = () => {
+    // Never keep flagged text: clear it and go straight to support.
+    setText('');
+    setLoaded(null);
+    navigate('/help/now', { replace: true });
+  };
+
+  // The backend server does the processing (POST /api/transcripts). One check runs here first on purpose:
+  // crisis language is caught on the device so it is never sent anywhere. The server checks again.
+  const onContinue = async () => {
+    if (submitting) return;
+    if (hasCrisisLanguage(text)) return goToCrisisSupport();
+    setSubmitting(true);
     setError(null);
+    const outcome = await submitTranscriptToServer(text, source);
+    setSubmitting(false);
+    if (outcome.status === 'crisis') return goToCrisisSupport();
+    if (outcome.status === 'rejected') return setError(outcome.error);
+    if (outcome.status === 'unavailable') return setError({ code: 'UNAVAILABLE', message: outcome.message });
     setReview(outcome.payload);
   };
 
@@ -175,7 +187,9 @@ export function VisitTranscript() {
         </div>
       )}
 
-      <button className="btn btn--primary btn--block" onClick={onContinue}>Continue</button>
+      <button className="btn btn--primary btn--block" onClick={onContinue} disabled={submitting} aria-busy={submitting}>
+        {submitting ? 'Checking…' : 'Continue'}
+      </button>
       {replacing && <button className="btn btn--block" onClick={() => setReplacing(false)}>Keep the saved one</button>}
     </Shell>
   );
