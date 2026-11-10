@@ -8,20 +8,37 @@ A progressive web app that helps people with depression and anxiety tell their s
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # production build + service worker (dist/)
+npm run dev        # web app: http://localhost:5173
+npm run dev:api    # API server (in a second terminal): http://localhost:3001/api/health
+npm run build      # type-check app + server, then production build + service worker (dist/)
 npm run preview    # serve the production build, installable as a PWA
 npm test           # unit tests (Vitest) + Gherkin scenarios (Cucumber)
 ```
 
 On the landing page, **Explore with demo data (Theo, synthetic)** loads a seeded case with a medication change, a dismissive visit and an upcoming visit.
 
+## API (backend)
+
+An Express server in `server/app.ts`, deployed on Vercel as a serverless function (`api/index.ts`) on the same domain as the app. Locally, `npm run dev:api` runs it on port 3001, and the web app's dev server forwards `/api` to it. See `docs/adr/ADR-003-express-api-on-vercel.md`.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/health` | `{ "status": "ok" }` if the server is up |
+| `POST /api/transcripts` | Body `{ "transcript": "...", "source": "paste" }`. Runs the same checks as the app (crisis check first). `201` with the payload, `200` with 988 help and no payload for crisis language, `400` / `413` / `415` for bad input. Stores nothing. |
+
+```bash
+curl -X POST http://localhost:3001/api/transcripts -H "Content-Type: application/json" \
+  -d '{"transcript": "Theo: I get dizzy when I stand.\nDr. Lane: Give it time.\nTheo: It started with the new dose."}'
+```
+
+No authentication or rate limiting yet, so don't add endpoints that cost money (AI calls) until those are in place.
+
 ## What this version is
 
 | Area | MVP choice |
 |---|---|
 | Stack | Vite + React 18 + TypeScript, React Router, Zustand, `vite-plugin-pwa` (offline app shell, installable) |
-| Data | **Local-only.** Approved records are stored in `localStorage`. The in-progress story draft is in `sessionStorage` and is discarded when the tab closes (ADR-001 Decision 5). No accounts, no server. |
+| Data | **Local-only.** Approved records are stored in `localStorage`. The in-progress story draft is in `sessionStorage` and is discarded when the tab closes (ADR-001 Decision 5). No accounts. The API (below) exists but the app doesn't send it data yet. |
 | Translation | **Rule-based** (`src/lib/translate.ts`), using the vocabulary from `translation_pairs.csv` plus the answers from the guided steps. Each clinical line keeps the patient's own words next to it, and anything missing reads "Not discussed". |
 | Safety | A keyword crisis check (`src/lib/safety.ts`) runs on every free-text input **before** translation. Flagged text is never saved, and the user is taken to 988 resources. It catches passive phrasing, including the Starter Pack safety fixture. |
 | Voice | "Hold to talk" uses the browser's Web Speech API where it's available (Chrome, Safari). Typing always works. |

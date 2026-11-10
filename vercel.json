@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "rewrites": [{ "source": "/((?!assets/|sw.js|workbox-|manifest.webmanifest|icon).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api/|assets/|sw.js|workbox-|manifest.webmanifest|icon).*)", "destination": "/index.html" }
+  ]
 }

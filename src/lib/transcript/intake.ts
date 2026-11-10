@@ -5,14 +5,15 @@
  * Order matters: the crisis check runs BEFORE anything is built, matching src/lib/safety.ts
  * ("A flagged message is never translated, summarized or saved").
  */
-import { hasCrisisLanguage } from '../safety';
+// .js extensions: this file also runs on the server (Node ES modules need them); Vite and TypeScript map them to .ts.
+import { hasCrisisLanguage } from '../safety.js';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
   MAX_TRANSCRIPT_CHARS,
   MAX_UPLOAD_BYTES,
   SYNTHETIC_LABEL,
   TRANSCRIPT_SCHEMA_VERSION,
-} from './constants';
+} from './constants.js';
 import type {
   IntakeError,
   IntakeErrorCode,
@@ -21,7 +22,7 @@ import type {
   TranscriptPayload,
   TranscriptSource,
   TranscriptTurn,
-} from './types';
+} from './types.js';
 
 const MESSAGES: Record<IntakeErrorCode, string> = {
   EMPTY: 'Paste the conversation or choose a .txt file. The transcript can’t be empty.',

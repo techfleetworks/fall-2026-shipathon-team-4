@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // In local development, forward /api requests to the Express server (`npm run dev:api`).
+  server: {
+    proxy: { '/api': 'http://localhost:3001' },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -24,6 +28,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
+        // Never answer API addresses with the offline app shell.
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
