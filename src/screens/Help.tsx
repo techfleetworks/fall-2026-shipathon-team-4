@@ -1,51 +1,53 @@
 import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
+import { CRISIS_MESSAGE, CRISIS_RESOURCES, CRISIS_SHORT } from '../lib/guardrails/copy';
 import { useApp } from '../lib/store';
 
 /**
- * Crisis resources (PRD F6/J5). Shown from the 988 link on every page, and
- * automatically when crisis language is detected (state.detected = true).
- * Calm, short, no counselling.
+ * Crisis support (PRD F6/J5, ticket B3). Shown from the help link on every page, and automatically
+ * when crisis language is detected (detected = true).
+ *
+ * Copy: Copy Drafts §3 crisis-response message, kept in src/lib/guardrails/copy.ts. It routes only to
+ * peer support that won't contact police or emergency services without consent. Draft — needs mentor
+ * sign-off; open decision on an opt-in, user-initiated emergency option (see ADR-004).
  */
 export function Help({ detected = false }: { detected?: boolean }) {
   const signedIn = useApp((s) => !!s.profile?.onboarded);
   return (
-    <Shell header={{ kind: 'sub', title: 'Help now', back: 'history', right: <span /> }}>
+    <Shell header={{ kind: 'sub', title: 'Support', back: 'history', right: <span /> }}>
       {detected ? (
         <>
-          <h1>You don’t have to go through this alone.</h1>
-          <p className="lead">
-            It sounds like things might be really hard right now. People are ready to talk with you, any time, for free.
-          </p>
+          <h1>{CRISIS_MESSAGE.title}</h1>
+          <p className="lead">{CRISIS_MESSAGE.intro}</p>
           <p className="small muted">We paused here. What you just wrote was not saved.</p>
         </>
       ) : (
         <>
-          <h1>Need help now?</h1>
-          <p className="lead">Free, confidential support, 24/7 in the US.</p>
+          <h1>{CRISIS_SHORT.lead}</h1>
+          <p className="lead">These people won’t call the police or send anyone unless you ask them to.</p>
         </>
       )}
 
-      <div className="card card--danger">
-        <h2>988 Suicide &amp; Crisis Lifeline</h2>
-        <div className="grid-2">
-          <a className="btn btn--danger" href="tel:988">Call 988</a>
-          <a className="btn" href="sms:988">Text 988</a>
-        </div>
-        <a className="small" href="https://988lifeline.org/chat/" target="_blank" rel="noreferrer">Or chat online at 988lifeline.org</a>
-      </div>
+      <ul className="stack" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {CRISIS_RESOURCES.map((r) => (
+          <li key={r.name} className="card card--soft">
+            <h2 style={{ fontSize: '1.05rem', margin: 0 }}>{r.name}</h2>
+            <p>{r.note}</p>
+            {r.tel && (
+              <a className="btn btn--primary" href={`tel:${r.tel}`} aria-label={`Call ${r.name} at ${r.phone}`}>
+                Call {r.phone}
+              </a>
+            )}
+            {r.url && (
+              <a className="btn" href={r.url} target="_blank" rel="noreferrer">
+                {r.urlLabel}
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
 
-      <div className="card card--soft">
-        <h3>Crisis Text Line</h3>
-        <p>Text <strong>HOME</strong> to <strong>741741</strong>.</p>
-        <a className="btn btn--sm" href="sms:741741?body=HOME">Open messages</a>
-      </div>
-
-      <div className="card card--soft">
-        <h3>In immediate danger?</h3>
-        <p>Call 911 or go to the nearest emergency room.</p>
-        <a className="btn btn--sm" href="tel:911">Call 911</a>
-      </div>
+      {detected && <p>{CRISIS_MESSAGE.closing}</p>}
 
       <Link to={signedIn ? '/home' : '/'} className="btn btn--ghost btn--block">Back to {signedIn ? 'Home' : 'start'}</Link>
     </Shell>

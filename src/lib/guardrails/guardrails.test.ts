@@ -6,7 +6,11 @@ import { TRANSLATION_PAIRS, matchSymptoms, translateStory } from '../translate';
 import type { StoryDraft } from '../types';
 import {
   BLOCKED_FALLBACK,
+  CRISIS_MESSAGE,
+  CRISIS_RESOURCES,
   CRISIS_SENTINEL,
+  CRISIS_SHORT,
+  crisisMessageText,
   DISCLAIMERS,
   GUARDRAIL_RULES,
   buildSystemPrompt,
@@ -50,6 +54,37 @@ describe('disclaimer copy', () => {
     expect(disclaimerText('notForEmergencies', 'X')).toBe(
       'Not for emergencies. If you’re having a medical emergency — chest pain, trouble breathing, signs of a stroke — call 911 or go to the emergency room. Don’t wait on the app.',
     );
+  });
+});
+
+describe('crisis copy (B3 draft)', () => {
+  it('routes only to the three peer resources from the Copy Drafts, never 988 or 911', () => {
+    expect(CRISIS_RESOURCES.map((r) => r.name)).toEqual([
+      'Trans Lifeline',
+      'Wildflower Alliance Peer Support Line',
+      'Find a warmline near you',
+    ]);
+    // No resource routes to 988, 911 or Crisis Text Line. ("does not contact 911" in a note is fine.)
+    for (const r of CRISIS_RESOURCES) {
+      expect(`${r.phone ?? ''} ${r.tel ?? ''} ${r.url ?? ''}`).not.toMatch(/988|911|741741/);
+    }
+    const all = JSON.stringify([CRISIS_RESOURCES, CRISIS_MESSAGE, CRISIS_SHORT, crisisMessageText()]);
+    expect(all).not.toMatch(/\b988\b|741741|call 911/i);
+  });
+
+  it('keeps the exact numbers and wording, with tel: links that match the displayed numbers', () => {
+    expect(CRISIS_SHORT.line).toBe('Trans Lifeline 877-565-8860 · Wildflower Alliance 888-407-4515 · more at warmline.org');
+    expect(CRISIS_MESSAGE.title).toBe('It sounds like you’re carrying something really heavy right now.');
+    for (const r of CRISIS_RESOURCES.filter((x) => x.phone)) {
+      expect(r.tel).toBe('+1' + r.phone!.replace(/-/g, ''));
+    }
+  });
+
+  it('builds the full message with every resource and the closing line', () => {
+    const text = crisisMessageText();
+    for (const r of CRISIS_RESOURCES) expect(text).toContain(r.note);
+    expect(text).toContain('877-565-8860');
+    expect(text.endsWith('We’re not going anywhere.')).toBe(true);
   });
 });
 

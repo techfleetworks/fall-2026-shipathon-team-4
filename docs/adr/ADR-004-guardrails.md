@@ -53,9 +53,15 @@ or the crisis-first step makes 7 tests fail.
 
 ## Open decisions (not decided here)
 
-1. **Crisis copy (ticket B3, needs mentor sign-off).** The draft crisis message routes to peer lines that won't
-   contact police (Trans Lifeline, Wildflower Alliance, warmline.org). The app and API currently point to **988**,
-   which the draft avoids. Not changed here; waiting on sign-off.
+1. **Crisis copy (ticket B3) — wired in, mentor sign-off still required.** At the team's direction (Nov 9), the
+   app and API now use the Copy Drafts crisis message, which routes only to peer support that won't contact
+   police without consent (Trans Lifeline, Wildflower Alliance, warmline.org). This replaced 988, Crisis Text
+   Line and a "Call 911" card on the crisis screen, the 988 footer, the menu label, the onboarding line and the
+   API's crisis response. Copy lives in `src/lib/guardrails/copy.ts`; tests fail if 988/911 come back.
+   **Still open for the mentor:** whether to add a clearly opt-in, user-initiated emergency option. Also:
+   re-verify the numbers before relying on them, the copy is US-centric, and the lines are not 24/7 (no
+   "open now" logic yet). ADR-001's "crisis banner (988/911)" should be updated to match.
+   The separate "Not for emergencies" disclaimer (medical emergencies → 911) is unchanged.
 2. **"This is AI — double-check it."** The engine isn't AI yet. Showing this line now would claim something we
    don't ship, so it's provided but should only be displayed once Claude is wired in.
 3. **Placement** of the long disclaimer, "not for emergencies" and onboarding lines in screens is frontend work.

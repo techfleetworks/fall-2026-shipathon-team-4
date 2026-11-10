@@ -13,6 +13,7 @@
  * Imports use .js extensions so Node's ES module loader finds them on Vercel.
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { CRISIS_RESOURCES, crisisMessageText } from '../src/lib/guardrails/copy.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
@@ -21,12 +22,13 @@ export const MAX_BODY = '1mb';
 
 const SOURCES: readonly TranscriptSource[] = ['paste', 'upload', 'sample'];
 
-/** Returned instead of a payload when crisis language is found. Mirrors the app's /help/now screen. */
+/**
+ * Returned instead of a payload when crisis language is found. Same copy as the app's /help/now screen
+ * (Copy Drafts §3, draft pending mentor sign-off): peer support that won't call the police unless asked.
+ */
 export const CRISIS_HELP = {
-  message: 'You don’t have to go through this alone. Call or text 988 to reach the 988 Suicide & Crisis Lifeline, any time.',
-  call: '988',
-  text: '988',
-  url: 'https://988lifeline.org',
+  message: crisisMessageText(),
+  resources: CRISIS_RESOURCES,
 } as const;
 
 export type ApiErrorCode =

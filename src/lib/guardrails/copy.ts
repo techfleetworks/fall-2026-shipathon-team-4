@@ -49,6 +49,66 @@ export function disclaimerText(key: DisclaimerKey, appName: string): string {
   return withAppName([line.title, line.body].filter(Boolean).join(' '), appName);
 }
 
+// ---------------------------------------------------------------- crisis response (ticket B3)
+
+/**
+ * Crisis-response copy, exact wording from the Copy Drafts, Section 3 ("first-pass fixture").
+ * STATUS: needs mentor sign-off. Routes only to peer support that won't contact police or emergency
+ * services without consent (no automatic active rescue). Numbers verified by Product Nov 2026; re-verify
+ * before relying. US-centric. Hours are not 24/7.
+ * Open mentor decision: whether to also offer a clearly opt-in, user-initiated emergency option.
+ */
+export interface CrisisResource {
+  name: string;
+  /** Display form, e.g. "877-565-8860". */
+  phone?: string;
+  /** For tel: links. */
+  tel?: string;
+  url?: string;
+  urlLabel?: string;
+  note: string;
+}
+
+export const CRISIS_RESOURCES: readonly CrisisResource[] = [
+  {
+    name: 'Trans Lifeline',
+    phone: '877-565-8860',
+    tel: '+18775658860',
+    note: 'Peer support; does not contact 911 or police without your consent.',
+  },
+  {
+    name: 'Wildflower Alliance Peer Support Line',
+    phone: '888-407-4515',
+    tel: '+18884074515',
+    note: 'Peer-run; doesn’t assess, report, or call the police (evenings, ET).',
+  },
+  {
+    name: 'Find a warmline near you',
+    url: 'https://warmline.org/directory',
+    urlLabel: 'warmline.org/directory',
+    note: 'Free, peer-run emotional support lines.',
+  },
+];
+
+export const CRISIS_MESSAGE = {
+  title: 'It sounds like you’re carrying something really heavy right now.',
+  intro:
+    'You don’t have to go through it alone — and you don’t have to do anything you’re not ready for. Reaching out is your choice, whenever and however you want. If it would help to talk to someone who gets it, here are people you can reach who won’t call the police or send anyone unless you ask them to:',
+  closing: 'You can keep talking here, or close this and come back anytime. We’re not going anywhere.',
+} as const;
+
+/** Short version for the footer / inline. */
+export const CRISIS_SHORT = {
+  lead: 'Want to talk to someone who won’t call the police or send anyone?',
+  line: 'Trans Lifeline 877-565-8860 · Wildflower Alliance 888-407-4515 · more at warmline.org',
+} as const;
+
+/** The full crisis message as one plain-text block (for the API and anywhere without rich layout). */
+export function crisisMessageText(): string {
+  const items = CRISIS_RESOURCES.map((r) => `• ${r.name} — ${r.phone ?? r.urlLabel}. ${r.note}`).join('\n');
+  return `${CRISIS_MESSAGE.title} ${CRISIS_MESSAGE.intro}\n${items}\n${CRISIS_MESSAGE.closing}`;
+}
+
 /**
  * Shown when the output checks block a response (rule: uncertainty is honest). Placeholder wording in the
  * same voice as the doc; ask Product to confirm it.
