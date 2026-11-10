@@ -155,21 +155,24 @@ export const useApp = create<AppData & AppActions>()(
           };
         }),
 
+      // ADR-001 Decision 5: the raw transcript is session-only. Its text goes to the session store
+      // (sessionStorage, gone when the tab closes); only a short, text-free note is kept in My case.
       saveVisitTranscript: (visitId, t) =>
         set((s) => {
           const visit = s.visits.find((v) => v.id === visitId);
           if (!visit) return {};
+          const replacing = !!useVisitTranscripts.getState().byVisit[visitId];
+          useVisitTranscripts.getState().put(visitId, t);
           const who = t.speakers.length ? ` · ${t.speakers.join(', ')}` : '';
           return {
-            visits: s.visits.map((v) => (v.id === visitId ? { ...v, transcript: t } : v)),
             evidence: [
               ...s.evidence,
               {
                 id: uid(),
                 date: visit.date,
                 type: 'visit',
-                title: visit.transcript ? 'Visit transcript replaced' : 'Visit transcript',
-                detail: `${t.stats.dialogueTurns} lines of conversation saved${who}`,
+                title: replacing ? 'Visit transcript replaced' : 'Visit transcript reviewed',
+                detail: `${t.stats.dialogueTurns} lines of conversation${who} · text kept for that session only`,
               },
             ],
           };
@@ -213,9 +216,25 @@ export const useApp = create<AppData & AppActions>()(
           /* storage unavailable */
         }
         useDraft.getState().reset();
+        useVisitTranscripts.getState().reset();
       },
     }),
-    { name: 'get-heard', version: 1, storage: createJSONStorage(() => localStorage) },
+    {
+      name: 'get-heard',
+      version: 2,
+      storage: createJSONStorage(() => localStorage),
+      // v2: raw transcripts no longer live on visits (ADR-001 Decision 5). Drop any saved by an earlier build.
+      migrate: (persisted, version) => {
+        const state = persisted as AppData;
+        if (version < 2 && Array.isArray(state?.visits)) {
+          state.visits = state.visits.map((v) => {
+            const { transcript: _dropped, ...rest } = v as Visit & { transcript?: unknown };
+            return rest;
+          });
+        }
+        return state;
+      },
+    },
   ),
 );
 
@@ -279,5 +298,35 @@ export const useDraft = create<DraftState>()(
       reset: () => set({ draft: emptyDraft() }),
     }),
     { name: 'get-heard-draft', storage: createJSONStorage(() => sessionStorage) },
+  ),
+);
+
+// ---------- session-only visit transcripts ----------
+
+/**
+ * Raw "In the room" transcripts, keyed by visit ID. Session-only (ADR-001 Decision 5): held in
+ * sessionStorage so a page refresh keeps them, and discarded when the tab closes. Never in localStorage.
+ * Later, the approved after-visit summary built from a transcript is what gets kept.
+ */
+interface VisitTranscriptState {
+  byVisit: Record<string, TranscriptPayload>;
+  put: (visitId: string, t: TranscriptPayload) => void;
+  remove: (visitId: string) => void;
+  reset: () => void;
+}
+
+export const useVisitTranscripts = create<VisitTranscriptState>()(
+  persist(
+    (set) => ({
+      byVisit: {},
+      put: (visitId, t) => set((s) => ({ byVisit: { ...s.byVisit, [visitId]: t } })),
+      remove: (visitId) =>
+        set((s) => {
+          const { [visitId]: _removed, ...rest } = s.byVisit;
+          return { byVisit: rest };
+        }),
+      reset: () => set({ byVisit: {} }),
+    }),
+    { name: 'get-heard-visit-transcripts', storage: createJSONStorage(() => sessionStorage) },
   ),
 );
