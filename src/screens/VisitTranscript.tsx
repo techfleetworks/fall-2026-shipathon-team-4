@@ -4,14 +4,17 @@ import { Shell } from '../components/Shell';
 import { useToast } from '../components/ui';
 import { THEO_SAMPLE_TRANSCRIPT } from '../data/sampleTranscript';
 import { formatDate } from '../lib/dates';
-import { useApp } from '../lib/store';
+import { useApp, useVisitTranscripts } from '../lib/store';
 import { MAX_TRANSCRIPT_CHARS, MAX_UPLOAD_BYTES } from '../lib/transcript/constants';
 import { decodeTranscriptFile, intakeError, processTranscript } from '../lib/transcript/intake';
 import type { IntakeError, TranscriptPayload, TranscriptSource } from '../lib/transcript/types';
 
+/** How long the transcript is kept, said plainly (ADR-001 Decision 5: raw transcripts are session-only). */
+const KEEP_NOTE = 'We keep the conversation only until you close this tab. It’s never saved to your case.';
+
 /**
- * "In the room" step: the patient pastes or uploads what was said during a visit, checks it,
- * and saves it to that visit. Nothing is kept until they choose "Save to this visit".
+ * "In the room" step: the patient pastes or uploads what was said during a visit, checks it, and adds
+ * it to that visit for this session. The text is session-only; My case gets a short note without it.
  */
 export function VisitTranscript() {
   const { id } = useParams();
@@ -20,6 +23,8 @@ export function VisitTranscript() {
   const demo = useApp((s) => s.demoMode);
   const you = useApp((s) => s.profile?.name);
   const save = useApp((s) => s.saveVisitTranscript);
+  const kept = useVisitTranscripts((s) => (id ? s.byVisit[id] : undefined));
+  const removeKept = useVisitTranscripts((s) => s.remove);
   const [toast, showToast] = useToast();
 
   const [text, setText] = useState('');
@@ -80,7 +85,13 @@ export function VisitTranscript() {
     setReplacing(false);
     setText('');
     setLoaded(null);
-    showToast('Saved to this visit');
+    showToast('Added to this visit for now');
+  };
+
+  const onRemove = () => {
+    removeKept(visit.id);
+    setReplacing(false);
+    showToast('Transcript removed');
   };
 
   // ----- Review before saving -----
@@ -88,28 +99,30 @@ export function VisitTranscript() {
     return (
       <Shell header={header}>
         <h1 ref={headingRef} tabIndex={-1}>Check it’s right</h1>
-        <p className="lead">This is what we’ll keep with your visit on {visitLabel}. Nothing is saved until you choose “Save to this visit”.</p>
+        <p className="lead">This is what we’ll use for your visit on {visitLabel}.</p>
+        <p className="small muted">{KEEP_NOTE}</p>
         <TranscriptView payload={review} you={you} />
-        <button className="btn btn--primary btn--block" onClick={onSave}>Save to this visit</button>
+        <button className="btn btn--primary btn--block" onClick={onSave}>Add to this visit</button>
         <button className="btn btn--block" onClick={() => setReview(null)}>Go back and edit</button>
       </Shell>
     );
   }
 
   // ----- Already saved -----
-  if (visit.transcript && !replacing) {
+  if (kept && !replacing) {
     return (
       <Shell header={header}>
         {toast}
-        <span className="badge">Saved to this visit</span>
+        <span className="badge">Kept until you close this tab</span>
         <h1 ref={headingRef} tabIndex={-1}>What was said in the room</h1>
-        <p className="small muted">Visit on {visitLabel}</p>
-        <TranscriptView payload={visit.transcript} you={you} />
+        <p className="small muted">Visit on {visitLabel}. {KEEP_NOTE}</p>
+        <TranscriptView payload={kept} you={you} />
         <section className="card card--muted">
           <span className="card__label">Coming next</span>
-          <p>We’ll turn this into an after-visit summary and action items for your case.</p>
+          <p>We’ll turn this into an after-visit summary and action items for your case. Only the summary you approve will be saved.</p>
         </section>
         <button className="btn btn--block" onClick={() => setReplacing(true)}>Replace transcript</button>
+        <button className="btn btn--block" onClick={onRemove}>Remove it now</button>
       </Shell>
     );
   }
@@ -117,8 +130,10 @@ export function VisitTranscript() {
   // ----- Paste or upload -----
   return (
     <Shell header={header}>
+      {toast}
       <h1 ref={headingRef} tabIndex={-1}>What was said in the room?</h1>
-      <p className="lead">Paste the conversation from your visit on {visitLabel}, or upload it as a text file. We’ll keep it with this visit so you can build your case.</p>
+      <p className="lead">Paste the conversation from your visit on {visitLabel}, or upload it as a text file. We’ll use it to help you follow up.</p>
+      <p className="small muted">{KEEP_NOTE}</p>
 
       {demo && (
         <section className="card card--soft">

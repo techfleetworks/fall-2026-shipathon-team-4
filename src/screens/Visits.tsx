@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { IconTrash } from '../components/Icons';
 import { formatDate, todayISO, uid } from '../lib/dates';
-import { selectUpcomingVisit, useApp } from '../lib/store';
+import { selectUpcomingVisit, useApp, useVisitTranscripts } from '../lib/store';
 
 export function Visits() {
   const state = useApp();
   const navigate = useNavigate();
   const upcoming = selectUpcomingVisit(state);
+  const transcripts = useVisitTranscripts((s) => s.byVisit);
   const past = state.visits.filter((v) => v !== upcoming).sort((a, b) => b.date.localeCompare(a.date));
   const [date, setDate] = useState(upcoming?.date ?? '');
   const [clinician, setClinician] = useState(upcoming?.clinician ?? '');
@@ -62,7 +63,7 @@ export function Visits() {
           )}
           {v.date <= todayISO() && (
             <Link to={`/visits/${v.id}/transcript`} className="btn btn--sm" style={{ alignSelf: 'flex-start' }}>
-              {v.transcript ? `What was said · ${v.transcript.stats.dialogueTurns} lines` : 'Add what was said in the room'}
+              {transcripts[v.id] ? `What was said · ${transcripts[v.id]!.stats.dialogueTurns} lines` : 'Add what was said in the room'}
             </Link>
           )}
         </div>
