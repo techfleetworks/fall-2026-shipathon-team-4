@@ -9,6 +9,7 @@
  * patient HAS a condition and never suggest medication changes.
  */
 import type { FieldKey, StoryDraft, SummaryField } from './types';
+import { DISCLAIMERS } from './guardrails/copy';
 
 interface Pair {
   match: RegExp;
@@ -130,4 +131,5 @@ export function translateStory(d: StoryDraft): SummaryField[] {
   ];
 }
 
-export const DISCLAIMER = 'Questions to discuss with your clinician — not a diagnosis or medical advice.';
+// Product's exact short disclaimer (Copy Drafts §3), kept in one place: src/lib/guardrails/copy.ts.
+export const DISCLAIMER = DISCLAIMERS.short.body;
