@@ -14,8 +14,10 @@
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { APP_SLUG } from '../src/lib/appConfig.js';
-import { CRISIS_DETECTED_RESOURCES, crisisMessageText } from '../src/lib/guardrails/copy.js';
+import { translateStoryGuarded } from '../src/lib/engine.js';
+import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../src/lib/guardrails/copy.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
+import { parseStoryDraft } from './storyDraft.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
 /** Largest JSON body accepted. The transcript rules (200,000 characters) are stricter; this is the outer limit. */
@@ -36,6 +38,8 @@ export type ApiErrorCode =
   | 'EMPTY'
   | 'TOO_LONG'
   | 'INVALID_INPUT'
+  | 'INVALID_STORY'
+  | 'EMPTY_STORY'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
   | 'UNSUPPORTED_MEDIA_TYPE'
@@ -45,6 +49,8 @@ export type ApiErrorCode =
 
 const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   INVALID_INPUT: 'Send a JSON object like { "transcript": "...", "source": "paste" }.',
+  INVALID_STORY: 'Send a JSON object like { "draft": { "opening": "..." } } using the app’s answer choices.',
+  EMPTY_STORY: 'Tell us a little about what’s been happening first.',
   MALFORMED_JSON: 'The request body is not valid JSON.',
   PAYLOAD_TOO_LARGE: `The request body is too large (limit ${MAX_BODY}).`,
   UNSUPPORTED_MEDIA_TYPE: 'Send the request body as JSON (Content-Type: application/json).',
@@ -111,7 +117,36 @@ export function createApp() {
     }
   });
 
-  api.all(['/health', '/transcripts'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  /**
+   * POST /api/prep-summary: "See it in doctor terms". Runs the engine with the guardrails on the server.
+   * Body: { "draft": StoryDraft }  (only known fields are read; chip answers must be the app's own choices)
+   * 200 { status: "ok", fields, disclaimer } · 200 { status: "crisis", help } (engine never runs)
+   * 200 { status: "blocked", message, rules } (a guardrail was broken; nothing to show or save)
+   * 400 invalid or empty story · 415 not JSON. Nothing is stored and the story is never logged.
+   */
+  api.post('/prep-summary', (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_STORY');
+    const parsed = parseStoryDraft(body.draft);
+    if (!parsed.ok) return sendError(res, 400, 'INVALID_STORY');
+
+    const outcome = translateStoryGuarded(parsed.draft);
+    switch (outcome.status) {
+      case 'crisis':
+        return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+      case 'blocked':
+        // Rule ids only: the blocked text itself never leaves the server.
+        return res.status(200).json({ status: 'blocked', message: outcome.message, rules: [...new Set(outcome.violations.map((v) => v.rule))] });
+      case 'ok': {
+        const empty = outcome.fields.every((f) => f.clinical === 'Not discussed') && !parsed.draft.opening.trim();
+        if (empty) return sendError(res, 400, 'EMPTY_STORY');
+        return res.status(200).json({ status: 'ok', fields: outcome.fields, disclaimer: DISCLAIMERS.short.body });
+      }
+    }
+  });
+
+  api.all(['/health', '/transcripts', '/prep-summary'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

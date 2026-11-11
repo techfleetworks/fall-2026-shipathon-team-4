@@ -69,7 +69,7 @@ export function Onboarding() {
           <div className="card card--muted">
             <ul className="list">
               <li><strong>Free for you, always.</strong> We never sell your data or show ads.</li>
-              <li><strong>Kept on this device.</strong> Your story and case stay on your phone or computer. Visit transcripts you add are checked by our server and not stored there.</li>
+              <li><strong>Saved on this device.</strong> Your story and case are saved on your phone or computer. When you see your story in doctor terms or add a visit transcript, our server processes the text and doesn’t store it.</li>
               <li><strong>You decide what to share.</strong> Nothing goes to your doctor unless you show or send it.</li>
               <li><strong>Delete anytime.</strong> Settings → Delete everything removes it all.</li>
             </ul>

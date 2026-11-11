@@ -30,6 +30,7 @@ features receive input that has already been validated and crisis-checked.
 |---|---|
 | `GET /api/health` | `200 { status: "ok", service, time }` |
 | `POST /api/transcripts` with `{ transcript, source? }` | `201 accepted + payload` · `200 crisis + 988-first help, no payload` · `400 error` · `413` over 1 MB · `415` not JSON |
+| `POST /api/prep-summary` with `{ draft }` | "See it in doctor terms": engine + guardrails run on the server. `200 ok + fields` · `200 crisis + 988-first help` (engine not run) · `200 blocked + message` (rule ids only) · `400` invalid/empty story · `415` not JSON. The story is validated field by field (unknown fields dropped, chip answers limited to the app's choices, length caps). |
 | Anything else under `/api` | JSON `404` or `405` |
 
 ## Considered options

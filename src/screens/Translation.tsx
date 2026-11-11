@@ -1,39 +1,101 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { Disclaimer } from '../components/ui';
-import { translateStoryGuarded } from '../lib/engine';
+import { requestPrepSummary } from '../lib/api';
 import { storyDraftHasCrisis } from '../lib/guardrails/enforce';
 import { hasCrisisLanguage } from '../lib/safety';
 import { useApp, useDraft } from '../lib/store';
 import type { SummaryField } from '../lib/types';
 
+type Phase = { s: 'loading' } | { s: 'ok' } | { s: 'blocked'; message: string } | { s: 'error'; message: string };
+
 export function Translation() {
   const navigate = useNavigate();
   const { draft, reset } = useDraft();
   const saveSummary = useApp((s) => s.saveSummary);
-  // The engine's output goes through the guardrails (no diagnosis, advice or dosing; approved terms only;
-  // crisis first) before the patient sees it. See src/lib/engine.ts.
-  const [guarded] = useState(() => translateStoryGuarded(draft));
-  const [fields, setFields] = useState<SummaryField[]>(() => (guarded.status === 'ok' ? guarded.fields : []));
+  const [fields, setFields] = useState<SummaryField[]>([]);
+  const [phase, setPhase] = useState<Phase>({ s: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const [serverCrisis, setServerCrisis] = useState(false);
   const [editing, setEditing] = useState<string | 'all' | null>(null);
+  // Set once this screen has sent the person to crisis support; after that it never contacts the server.
+  const leftForCrisis = useRef(false);
 
-  // Backstop: crisis language anywhere in the story (or flagged by the guardrails) goes to crisis support and
-  // is never turned into a summary or brief, whatever path led here (Skip, Save and resume, back navigation).
-  const crisis = storyDraftHasCrisis(draft) || guarded.status === 'crisis';
+  // The story draft is restored from session storage; wait until that's done before deciding anything,
+  // so a half-loaded (empty) draft is never what gets checked or sent.
+  const [hydrated, setHydrated] = useState(() => useDraft.persist.hasHydrated());
+  useEffect(() => {
+    if (hydrated) return;
+    const unsub = useDraft.persist.onFinishHydration(() => setHydrated(true));
+    if (useDraft.persist.hasHydrated()) setHydrated(true);
+    return unsub;
+  }, [hydrated]);
+
+  // Crisis is checked on the device first, so crisis text is never sent. The server checks again.
+  const localCrisis = hydrated && storyDraftHasCrisis(draft);
+
+  // The backend server turns the story into doctor terms: engine + guardrails run there
+  // (POST /api/prep-summary). Runs once on arrival, and again on "Try again".
+  useEffect(() => {
+    if (!hydrated || leftForCrisis.current) return;
+    // Re-check the latest draft right before sending: crisis text must never leave the device.
+    const current = useDraft.getState().draft;
+    if (storyDraftHasCrisis(current)) return;
+    const ctrl = new AbortController();
+    setPhase({ s: 'loading' });
+    requestPrepSummary(current, { signal: ctrl.signal }).then((out) => {
+      if (ctrl.signal.aborted) return;
+      if (out.status === 'ok') {
+        setFields(out.fields);
+        setPhase({ s: 'ok' });
+      } else if (out.status === 'crisis') setServerCrisis(true);
+      else if (out.status === 'blocked') setPhase({ s: 'blocked', message: out.message });
+      else if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') navigate('/story', { replace: true });
+      else setPhase({ s: 'error', message: out.status === 'rejected' ? out.error.message : out.message });
+    });
+    return () => ctrl.abort();
+    // Deliberately only on arrival and retry: the draft doesn't change on this screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, hydrated]);
+
+  // Backstop: crisis language anywhere in the story (or flagged by the server) goes to crisis support and is
+  // never turned into a summary or brief, whatever path led here (Skip, Save and resume, back navigation).
+  const crisis = localCrisis || serverCrisis;
   useEffect(() => {
     if (!crisis) return;
+    leftForCrisis.current = true;
     reset();
     navigate('/help/now', { replace: true });
   }, [crisis, reset, navigate]);
   if (crisis) return null;
 
+  if (phase.s === 'loading') {
+    return (
+      <Shell header={{ kind: 'sub', back: '/story/5' }}>
+        <h1>Here’s how a doctor would read it</h1>
+        <p className="lead" role="status">Putting your words into doctor terms…</p>
+      </Shell>
+    );
+  }
+
+  if (phase.s === 'error') {
+    return (
+      <Shell header={{ kind: 'sub', back: '/story/5' }}>
+        <h1>Here’s how a doctor would read it</h1>
+        <div className="card card--danger" role="alert">{phase.message}</div>
+        <button className="btn btn--primary btn--block" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+        <Link to="/story" className="btn btn--block">Back to my story</Link>
+      </Shell>
+    );
+  }
+
   // A rule was broken: show the honest fallback instead of the output. Nothing can be saved from here.
-  if (guarded.status === 'blocked') {
+  if (phase.s === 'blocked') {
     return (
       <Shell header={{ kind: 'sub', back: '/story/5' }}>
         <h1>Let’s put this in your words</h1>
-        <p className="lead">{guarded.message}</p>
+        <p className="lead">{phase.message}</p>
         <Link to="/story" className="btn btn--primary btn--block">Back to my story</Link>
         <Disclaimer />
       </Shell>

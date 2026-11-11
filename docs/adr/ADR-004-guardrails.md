@@ -40,6 +40,11 @@ rule → the honest fallback with "Back to my story" and nothing can be saved; o
 terms must come from the approved vocabulary. The engine is a parameter, so the future Claude engine (and the
 server's `/visit-summary`) get the same checks. Bypassing the check makes 6 tests fail.
 
+**Moved to the backend (Nov 11).** The doctor-terms step now calls `POST /api/prep-summary`, so the engine and
+the guardrails run on the Express server (ADR-001: AI tasks run only in Express). The device still checks for
+crisis first so crisis text is never sent, and if the server can't be reached the screen says so and translates
+nothing locally.
+
 ## Evaluation
 
 `src/lib/guardrails/guardrails.test.ts` runs the rule-based engine over the Starter Pack eval set

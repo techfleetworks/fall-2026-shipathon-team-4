@@ -24,6 +24,7 @@ An Express server in `server/app.ts`, deployed on Vercel as a serverless functio
 | Endpoint | What it does |
 |---|---|
 | `GET /api/health` | `{ "status": "ok" }` if the server is up |
+| `POST /api/prep-summary` | Body `{ "draft": { ... } }` (the story). Runs the doctor-terms engine and the guardrails on the server. `200` with the fields, a crisis response (988 first), or `blocked` with the honest fallback; `400` for an invalid or empty story. Stores nothing. |
 | `POST /api/transcripts` | Body `{ "transcript": "...", "source": "paste" }`. Runs the same checks as the app (crisis check first). `201` with the payload, `200` with a gentle handoff and 988 first (no payload) for crisis language, `400` / `413` / `415` for bad input. Stores nothing. |
 
 ```bash

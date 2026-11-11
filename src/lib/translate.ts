@@ -8,8 +8,9 @@
  * Guardrail (PRD §6.0): we only translate symptoms into terms. We never say the
  * patient HAS a condition and never suggest medication changes.
  */
-import type { FieldKey, StoryDraft, SummaryField } from './types';
-import { DISCLAIMERS } from './guardrails/copy';
+import type { FieldKey, StoryDraft, SummaryField } from './types.js';
+// .js extension: this file also runs on the server (Node ES modules); Vite maps it to .ts.
+import { DISCLAIMERS } from './guardrails/copy.js';
 
 interface Pair {
   match: RegExp;

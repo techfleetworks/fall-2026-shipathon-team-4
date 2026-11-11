@@ -6,6 +6,7 @@ import { APP_NAME } from './appConfig';
 import { SYNTHETIC_LABEL } from './transcript/constants';
 import { intakeError } from './transcript/intake';
 import type { TranscriptPayload, TranscriptSource } from './transcript/types';
+import type { StoryDraft, SummaryField } from './types';
 
 export type ServerTranscriptOutcome =
   | { status: 'accepted'; payload: TranscriptPayload }
@@ -26,6 +27,63 @@ function isPayload(v: unknown): v is TranscriptPayload {
   return typeof p.transcript === 'string' && Array.isArray(p.turns) && p.disclaimer === SYNTHETIC_LABEL;
 }
 
+// ---------------------------------------------------------------- POST /api/prep-summary
+
+export type PrepSummaryOutcome =
+  | { status: 'ok'; fields: SummaryField[] }
+  /** Crisis language: nothing was built. Show the crisis screen. */
+  | { status: 'crisis' }
+  /** A guardrail was broken; show this message instead of a summary. */
+  | { status: 'blocked'; message: string }
+  | { status: 'rejected'; error: { code: string; message: string } }
+  | { status: 'unavailable'; message: string };
+
+function isFields(v: unknown): v is SummaryField[] {
+  return (
+    Array.isArray(v) &&
+    v.length > 0 &&
+    v.every((f) => typeof f === 'object' && f !== null && typeof f.key === 'string' && typeof f.label === 'string' && typeof f.clinical === 'string')
+  );
+}
+
+/** Ask the server to turn a story into doctor terms (engine + guardrails run there). Never throws. */
+export async function requestPrepSummary(
+  draft: StoryDraft,
+  { signal, fetchImpl = fetch }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): Promise<PrepSummaryOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl('/api/prep-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft }),
+      signal,
+    });
+  } catch {
+    return unavailablePrep();
+  }
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return unavailablePrep();
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+
+  if (res.status === 200 && b.status === 'ok' && isFields(b.fields)) return { status: 'ok', fields: b.fields };
+  if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
+  if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };
+  if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {
+    const e = b.error as Record<string, unknown>;
+    if (typeof e.code === 'string' && typeof e.message === 'string') return { status: 'rejected', error: { code: e.code, message: e.message } };
+  }
+  return unavailablePrep();
+}
+
+const unavailablePrep = (): PrepSummaryOutcome => ({ status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE });
+
+// ---------------------------------------------------------------- POST /api/transcripts
+
 /** Send a transcript to POST /api/transcripts. Never throws. */
 export async function submitTranscriptToServer(
   transcript: string,
@@ -39,7 +97,6 @@ export async function submitTranscriptToServer(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript, source }),
       signal,
-      cache: 'no-store',
     });
   } catch {
     return unavailable();
