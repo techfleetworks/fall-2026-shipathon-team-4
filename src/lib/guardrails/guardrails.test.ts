@@ -46,6 +46,13 @@ describe('disclaimer copy', () => {
     expect(all).toContain('{app}');
   });
 
+  it('uses the official name, Appointment Ready, by default', () => {
+    expect(disclaimerText('notMedicalAdvice')).toBe(
+      'This isn’t medical advice. Appointment Ready helps you prepare for and understand your care — it doesn’t diagnose, treat, or replace your clinician.',
+    );
+    expect(buildSystemPrompt({ task: 'Summarize.' })).toContain('inside Appointment Ready');
+  });
+
   it('fills in the app name everywhere', () => {
     expect(disclaimerText('aiCanBeWrong', 'Acme')).toBe(
       'This is AI — double-check it. Acme can make mistakes. Confirm anything important with your doctor or care team before you act on it.',

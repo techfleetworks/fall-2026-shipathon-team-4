@@ -1,7 +1,8 @@
 /**
- * Browser client for the Get Heard API (server/app.ts). Same origin, so the path is relative:
+ * Browser client for the app's API (server/app.ts). Same origin, so the path is relative:
  * on Vercel it reaches the serverless function, and in local dev Vite forwards it to `npm run dev:api`.
  */
+import { APP_NAME } from './appConfig';
 import { SYNTHETIC_LABEL } from './transcript/constants';
 import { intakeError } from './transcript/intake';
 import type { TranscriptPayload, TranscriptSource } from './transcript/types';
@@ -15,8 +16,7 @@ export type ServerTranscriptOutcome =
   /** The server couldn't be reached or answered unexpectedly. Nothing was processed. */
   | { status: 'unavailable'; message: string };
 
-export const SERVER_UNAVAILABLE_MESSAGE =
-  'We couldn’t reach the Get Heard server, so nothing was processed. Check your connection and try again.';
+export const SERVER_UNAVAILABLE_MESSAGE = `We couldn’t reach the ${APP_NAME} server, so nothing was processed. Check your connection and try again.`;
 
 const unavailable = (): ServerTranscriptOutcome => ({ status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE });
 

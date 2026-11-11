@@ -1,9 +1,11 @@
+import { APP_NAME } from '../appConfig.js';
+
 /**
  * User-facing disclaimer lines (ticket B1). Exact wording from "Week-1 Product & Pitch — Copy Drafts",
  * Section 3 (Nov 2, 2026). Change wording only with Product.
  *
- * The app name is NOT locked, so it is never hardcoded here: every line that names the app uses the
- * {app} token, filled in by withAppName(). Pass whatever name the team settles on.
+ * Every line that names the app uses the {app} token, filled in by withAppName(). The official name
+ * ("Appointment Ready") lives in src/lib/appConfig.ts and is the default; change it there, not here.
  */
 
 export const APP_TOKEN = '{app}';
@@ -44,7 +46,7 @@ export function withAppName(text: string, appName: string): string {
 }
 
 /** A disclaimer as one plain string (title + body), with the app name filled in. */
-export function disclaimerText(key: DisclaimerKey, appName: string): string {
+export function disclaimerText(key: DisclaimerKey, appName: string = APP_NAME): string {
   const line: DisclaimerLine = DISCLAIMERS[key];
   return withAppName([line.title, line.body].filter(Boolean).join(' '), appName);
 }

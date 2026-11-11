@@ -13,7 +13,7 @@ describe('GET /api/health', () => {
   it('returns ok as JSON', async () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', service: 'get-heard-api' });
+    expect(res.body).toMatchObject({ status: 'ok', service: 'appointment-ready-api' });
     expect(Number.isNaN(Date.parse(res.body.time))).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 /**
- * Get Heard API: the Express app.
+ * Appointment Ready API (name from src/lib/appConfig.ts): the Express app.
  *
  * Runs two ways from the same code:
  *  - on Vercel, as a serverless function (api/index.ts exports this app), and
@@ -13,6 +13,7 @@
  * Imports use .js extensions so Node's ES module loader finds them on Vercel.
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { APP_SLUG } from '../src/lib/appConfig.js';
 import { CRISIS_DETECTED_RESOURCES, crisisMessageText } from '../src/lib/guardrails/copy.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
@@ -80,7 +81,7 @@ export function createApp() {
 
   /** GET /api/health: is the server up? Used by people and uptime monitors. */
   api.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'get-heard-api', time: new Date().toISOString() });
+    res.json({ status: 'ok', service: `${APP_SLUG}-api`, time: new Date().toISOString() });
   });
 
   /**

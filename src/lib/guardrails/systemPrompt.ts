@@ -3,18 +3,19 @@
  * Express API calls Claude; nothing calls a model yet. The rules come from rules.ts so the prompt and
  * the output checks can't drift apart.
  */
+import { APP_NAME } from '../appConfig.js';
 import { GUARDRAIL_RULES, CRISIS_SENTINEL } from './rules.js';
 
 export interface SystemPromptOptions {
-  /** The app's display name. Not locked yet, so it's always passed in. */
-  appName: string;
+  /** The app's display name. Defaults to the official name in appConfig.ts. */
+  appName?: string;
   /** What this call does, e.g. "Write the after-visit summary from this visit transcript." */
   task: string;
   /** Clinical terms the engine may use (e.g. from translation_pairs.csv). Anything else must stay in the user's words. */
   approvedVocabulary?: readonly string[];
 }
 
-export function buildSystemPrompt({ appName, task, approvedVocabulary = [] }: SystemPromptOptions): string {
+export function buildSystemPrompt({ appName = APP_NAME, task, approvedVocabulary = [] }: SystemPromptOptions): string {
   const rules = GUARDRAIL_RULES.map((r, i) => `${i + 1}. ${r.title}. ${r.instruction}`).join('\n');
   const vocab = approvedVocabulary.length
     ? `\n\nApproved clinical vocabulary (use only these terms, or the user's own words):\n${approvedVocabulary.map((t) => `- ${t}`).join('\n')}`
