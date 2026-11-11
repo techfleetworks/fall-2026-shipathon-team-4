@@ -34,6 +34,12 @@ How the checks decide:
 
 The app's existing `DISCLAIMER` now uses Product's exact short line from `copy.ts`.
 
+**Wired into the live app (Nov 11).** `src/lib/engine.ts` → `translateStoryGuarded()` runs every "See it in doctor
+terms" output through `guardResponse()` before the patient sees it: crisis → crisis path (engine not run); a broken
+rule → the honest fallback with "Back to my story" and nothing can be saved; otherwise the summary shows. Symptom
+terms must come from the approved vocabulary. The engine is a parameter, so the future Claude engine (and the
+server's `/visit-summary`) get the same checks. Bypassing the check makes 6 tests fail.
+
 ## Evaluation
 
 `src/lib/guardrails/guardrails.test.ts` runs the rule-based engine over the Starter Pack eval set

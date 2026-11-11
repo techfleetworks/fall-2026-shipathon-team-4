@@ -2,28 +2,43 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { Disclaimer } from '../components/ui';
+import { translateStoryGuarded } from '../lib/engine';
 import { storyDraftHasCrisis } from '../lib/guardrails/enforce';
 import { hasCrisisLanguage } from '../lib/safety';
 import { useApp, useDraft } from '../lib/store';
-import { translateStory } from '../lib/translate';
 import type { SummaryField } from '../lib/types';
 
 export function Translation() {
   const navigate = useNavigate();
   const { draft, reset } = useDraft();
   const saveSummary = useApp((s) => s.saveSummary);
-  const [fields, setFields] = useState<SummaryField[]>(() => translateStory(draft));
+  // The engine's output goes through the guardrails (no diagnosis, advice or dosing; approved terms only;
+  // crisis first) before the patient sees it. See src/lib/engine.ts.
+  const [guarded] = useState(() => translateStoryGuarded(draft));
+  const [fields, setFields] = useState<SummaryField[]>(() => (guarded.status === 'ok' ? guarded.fields : []));
   const [editing, setEditing] = useState<string | 'all' | null>(null);
 
-  // Backstop: crisis language anywhere in the story goes to crisis support and is never turned into a
-  // summary or brief, whatever path led here (Skip, Save and resume, back navigation).
-  const crisis = storyDraftHasCrisis(draft);
+  // Backstop: crisis language anywhere in the story (or flagged by the guardrails) goes to crisis support and
+  // is never turned into a summary or brief, whatever path led here (Skip, Save and resume, back navigation).
+  const crisis = storyDraftHasCrisis(draft) || guarded.status === 'crisis';
   useEffect(() => {
     if (!crisis) return;
     reset();
     navigate('/help/now', { replace: true });
   }, [crisis, reset, navigate]);
   if (crisis) return null;
+
+  // A rule was broken: show the honest fallback instead of the output. Nothing can be saved from here.
+  if (guarded.status === 'blocked') {
+    return (
+      <Shell header={{ kind: 'sub', back: '/story/5' }}>
+        <h1>Let’s put this in your words</h1>
+        <p className="lead">{guarded.message}</p>
+        <Link to="/story" className="btn btn--primary btn--block">Back to my story</Link>
+        <Disclaimer />
+      </Shell>
+    );
+  }
 
   const isEmpty = fields.every((f) => f.clinical === 'Not discussed') && !draft.opening.trim();
   if (isEmpty) return <Navigate to="/story" replace />;
