@@ -8,10 +8,13 @@ You'll do the account and key steps yourself. Keys are like passwords: don't pas
 ---
 
 ## 1. Create the project
-1. Go to **supabase.com** → sign in (GitHub sign-in is easiest) → **New project**.
-2. Name: `appointment-ready`. Database password: generate one and save it in a password manager.
-   Region: closest to your team (e.g. *East US*). Plan: **Free**.
-3. Wait about 2 minutes for it to finish setting up.
+1. Go to **supabase.com** → sign in (GitHub sign-in is easiest).
+2. **First time? Create an organization** (Supabase asks for this before any project):
+   name e.g. `Appointment Ready`, type *Personal*, plan **Free – $0/month** → **Create organization**.
+3. Supabase then opens **Create a new project** (or open the organization → **New project**):
+   name `appointment-ready`; database password: **Generate a password** and save it in a password manager;
+   region closest to your team (e.g. *East US*) → **Create new project**.
+4. Wait about 2 minutes for it to finish setting up.
 
 ## 2. Create the database table
 1. In the project: **SQL Editor** → **New query**.
