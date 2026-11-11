@@ -4,6 +4,7 @@ import { Shell } from '../components/Shell';
 import { ChipSelect, ConfirmButton, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
 import { todayISO } from '../lib/dates';
+import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
 import { isLinkActive, useApp } from '../lib/store';
 import { ShareLinkRow } from './Visits';
 
@@ -28,6 +29,7 @@ export function Settings() {
   const active: Slug = (section as Slug) ?? 'profile';
 
   const logOut = () => {
+    void serverLogOut(); // ends the session on the sign-in server too (no-op if it isn't set up)
     signOut();
     navigate('/', { replace: true });
   };
@@ -150,6 +152,19 @@ function PrivacySection() {
   const state = useApp();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Delete on the sign-in server first (account + its database rows). Only if that worked, wipe this device,
+  // so a failed delete can be retried. Without server sign-in this just wipes the device, as before.
+  const deleteForGood = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    const server = await deleteServerAccount();
+    setDeleting(false);
+    if (!server.ok) return setDeleteError(server.message);
+    state.deleteEverything();
+    navigate('/', { replace: true });
+  };
   const [toast, showToast] = useToast();
   const activeLinks = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
   const consent = state.profile?.consent ?? { saveStory: true, makeSummaries: false, anonymousRatings: false };
@@ -213,8 +228,11 @@ function PrivacySection() {
               <p id="del-q"><strong>Delete your account and everything on this device?</strong> This can’t be undone.</p>
               <div className="btn-row">
                 <button className="btn btn--outline" onClick={() => setConfirming(false)}>Cancel</button>
-                <button className="btn btn--danger" onClick={() => { state.deleteEverything(); navigate('/', { replace: true }); }}>Delete for good</button>
+                <button className="btn btn--danger" onClick={() => void deleteForGood()} disabled={deleting} aria-busy={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete for good'}
+                </button>
               </div>
+              {deleteError && <p className="note" role="alert">{deleteError}</p>}
             </div>
           )}
         </section>

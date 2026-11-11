@@ -52,4 +52,5 @@ npm test          # unit, API and Gherkin tests (CI runs these on every PR)
 ```
 
 - **Frontend guide:** [`docs/API.md`](docs/API.md): what to send, what comes back, and the crisis rules every screen keeps.
-- **Decisions:** `docs/adr/` (ADR-002 transcript intake, ADR-003 Express on Vercel, ADR-004 guardrails).
+- **Sign-up / log-in server:** Supabase Auth, checked by the API on every request. Setup: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md). Without it, the app keeps its on-device demo sign-in.
+- **Decisions:** `docs/adr/` (ADR-002 transcript intake, ADR-003 Express on Vercel, ADR-004 guardrails, ADR-005 Supabase sign-in).
