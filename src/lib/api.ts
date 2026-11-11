@@ -17,6 +17,25 @@ export type ServerTranscriptOutcome =
   /** The server couldn't be reached or answered unexpectedly. Nothing was processed. */
   | { status: 'unavailable'; message: string };
 
+// ---------------------------------------------------------------- sign-in token
+
+/**
+ * Returns the signed-in user's access token, or null. Registered by src/lib/auth.ts when Supabase sign-in is
+ * set up; until then every call goes without one (the server allows that only while sign-in isn't configured).
+ * Kept as a plug-in so this file has no browser-only imports and can be tested on the server.
+ */
+let accessTokenProvider: () => Promise<string | null> = async () => null;
+export function setAccessTokenProvider(provider: () => Promise<string | null>): void {
+  accessTokenProvider = provider;
+}
+async function jsonHeaders(): Promise<Record<string, string>> {
+  const token = await accessTokenProvider().catch(() => null);
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+/** Shown when the server says the sign-in is missing or expired (401). */
+export const SIGNED_OUT_MESSAGE = 'Your sign-in has expired. Please log in again.';
+
 export const SERVER_UNAVAILABLE_MESSAGE = `We couldn’t reach the ${APP_NAME} server, so nothing was processed. Check your connection and try again.`;
 
 const unavailable = (): ServerTranscriptOutcome => ({ status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE });
@@ -55,13 +74,14 @@ export async function requestPrepSummary(
   try {
     res = await fetchImpl('/api/prep-summary', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await jsonHeaders(),
       body: JSON.stringify({ draft }),
       signal,
     });
   } catch {
     return unavailablePrep();
   }
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
   let body: unknown;
   try {
     body = await res.json();
@@ -101,7 +121,7 @@ export async function requestVisitSummary(
   try {
     res = await fetchImpl('/api/visit-summary', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await jsonHeaders(),
       body: JSON.stringify({ transcript, source, ...(patientName ? { patientName } : {}) }),
       signal,
     });
@@ -109,6 +129,7 @@ export async function requestVisitSummary(
     return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
   }
   if (res.status === 413) return { status: 'rejected', error: intakeError('TOO_LONG') };
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
   let body: unknown;
   try {
     body = await res.json();
@@ -140,7 +161,7 @@ export async function submitTranscriptToServer(
   try {
     res = await fetchImpl('/api/transcripts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await jsonHeaders(),
       body: JSON.stringify({ transcript, source }),
       signal,
     });
@@ -151,6 +172,7 @@ export async function submitTranscriptToServer(
   // The body limit (1 MB) can trip before the 200,000-character check; show the same message.
   if (res.status === 413) return { status: 'rejected', error: intakeError('TOO_LONG') };
 
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
   let body: unknown;
   try {
     body = await res.json();

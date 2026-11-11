@@ -26,6 +26,23 @@ npm test          # all tests (unit, API, Gherkin). CI runs these on every PR.
 
 ---
 
+## Sign-up, log-in and the token (Supabase)
+
+Accounts live on the Supabase sign-in server once it's set up (`docs/SUPABASE_SETUP.md`, ADR-005).
+Screens call `src/lib/auth.ts`, never Supabase directly:
+
+| Function | Use |
+|---|---|
+| `isServerAuthEnabled()` | `false` until Supabase is configured; then the on-device fallback is skipped |
+| `signUp({ email, password, firstName, lastName })` | `ok` · `confirm-email` (show the message) · `error` (show the message) |
+| `logIn({ email, password })` | same statuses |
+| `logOut()` | ends the server session (Settings → Log out already calls it) |
+| `deleteServerAccount()` | deletes the account on the server; wipe the device only if `ok` (Settings already does this) |
+
+You don't add tokens yourself: every function in `src/lib/api.ts` sends the signed-in user's token. If the server
+answers 401 you get `status: 'rejected'` with code `UNAUTHORIZED` and the message "Your sign-in has expired.
+Please log in again.", so send the person to `/login`.
+
 ## 1. Story → doctor terms: `POST /api/prep-summary`
 
 Runs the doctor-terms engine **with the guardrails** (no diagnosis, no advice, no dosing, approved terms only,

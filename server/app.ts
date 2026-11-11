@@ -19,6 +19,7 @@ import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../sr
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
+import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
 import { parseStoryDraft } from './storyDraft.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
@@ -50,6 +51,8 @@ export type ApiErrorCode =
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'METHOD_NOT_ALLOWED'
   | 'NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'AUTH_NOT_CONFIGURED'
   | 'INTERNAL';
 
 const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
@@ -61,6 +64,8 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   UNSUPPORTED_MEDIA_TYPE: 'Send the request body as JSON (Content-Type: application/json).',
   METHOD_NOT_ALLOWED: 'That method is not allowed on this endpoint.',
   NOT_FOUND: 'No API endpoint at this address.',
+  UNAUTHORIZED: 'Please log in to continue.',
+  AUTH_NOT_CONFIGURED: 'Sign-in isn’t set up on the server yet.',
   INTERNAL: 'Something went wrong on our side. Please try again.',
 };
 
@@ -72,7 +77,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-export function createApp() {
+/**
+ * @param auth  Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ */
+export function createApp({ auth = authConfigFromEnv() }: { auth?: AuthConfig } = {}) {
+  const signedIn = requireUser(auth, sendError);
   const app = express();
   app.disable('x-powered-by');
 
@@ -101,7 +110,7 @@ export function createApp() {
    * 201 accepted (payload) · 200 crisis (help, no payload) · 400 rejected · 415 not JSON
    * Nothing is stored: the server checks and shapes the transcript, then forgets it.
    */
-  api.post('/transcripts', (req, res) => {
+  api.post('/transcripts', signedIn, (req, res) => {
     if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
     const body: unknown = req.body;
     if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_INPUT');
@@ -129,7 +138,7 @@ export function createApp() {
    * 200 { status: "blocked", message, rules } (a guardrail was broken; nothing to show or save)
    * 400 invalid or empty story · 415 not JSON. Nothing is stored and the story is never logged.
    */
-  api.post('/prep-summary', (req, res) => {
+  api.post('/prep-summary', signedIn, (req, res) => {
     if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
     const body: unknown = req.body;
     if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_STORY');
@@ -158,7 +167,7 @@ export function createApp() {
    * 200 { status: "crisis", help } (nothing built) · 400 rejected (empty, too long, bad input) · 415 not JSON
    * Rule-based for now (the clinician's own lines). Nothing is stored and the transcript is never logged.
    */
-  api.post('/visit-summary', (req, res) => {
+  api.post('/visit-summary', signedIn, (req, res) => {
     if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
     const body: unknown = req.body;
     if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_INPUT');
@@ -180,7 +189,20 @@ export function createApp() {
     });
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  /**
+   * DELETE /api/account: permanently deletes the signed-in user's account on the sign-in server. Their database
+   * rows go with it (ON DELETE CASCADE). The app then wipes the device. Copy promise: "deleted whenever you ask".
+   * 204 deleted · 401 not signed in · 503 sign-in or the admin key isn't configured · 500 the delete failed
+   */
+  api.delete('/account', requireUser({ ...auth, required: true }, sendError), async (_req, res) => {
+    if (!auth.admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED');
+    const user = res.locals.user as { id: string };
+    const ok = await auth.admin.deleteUser(user.id);
+    if (!ok) return sendError(res, 500, 'INTERNAL');
+    return res.status(204).end();
+  });
+
+  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
