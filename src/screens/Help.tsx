@@ -1,53 +1,53 @@
-import { Link } from 'react-router-dom';
-import { Shell } from '../components/Shell';
-import { useApp } from '../lib/store';
+import { Link, useNavigate } from 'react-router-dom';
+import { PublicLayout } from '../components/PublicLayout';
+import { selectSignedIn, useApp } from '../lib/store';
 
 /**
- * Crisis resources (PRD F6/J5). Shown from the 988 link on every page, and
- * automatically when crisis language is detected (state.detected = true).
- * Calm, short, no counselling.
+ * P5 · Crisis help (988). Reachable from every page, logged in or not.
+ * Calm layout, no clutter, terracotta only here. Also shown automatically when
+ * crisis language is detected (`detected`) — that text is never saved.
+ * Verify all crisis details before launch.
  */
 export function Help({ detected = false }: { detected?: boolean }) {
-  const signedIn = useApp((s) => !!s.profile?.onboarded);
+  const navigate = useNavigate();
+  const signedIn = useApp(selectSignedIn);
+  const back = () => {
+    if (!detected && window.history.state?.idx > 0) navigate(-1);
+    else navigate(signedIn ? '/home' : '/');
+  };
+
   return (
-    <Shell header={{ kind: 'sub', title: 'Help now', back: 'history', right: <span /> }}>
-      {detected ? (
-        <>
-          <h1>You don’t have to go through this alone.</h1>
-          <p className="lead">
+    <PublicLayout header="back" footer={false} onBack={back}>
+      <main id="main" className="crisis">
+        <h1>{detected ? 'You don’t have to go through this alone.' : 'You’re not alone. Help is here now.'}</h1>
+        {detected && (
+          <p className="pub-sub">
             It sounds like things might be really hard right now. People are ready to talk with you, any time, for free.
+            We paused here — what you just wrote was not saved.
           </p>
-          <p className="small muted">We paused here. What you just wrote was not saved.</p>
-        </>
-      ) : (
-        <>
-          <h1>Need help now?</h1>
-          <p className="lead">Free, confidential support, 24/7 in the US.</p>
-        </>
-      )}
+        )}
 
-      <div className="card card--danger">
-        <h2>988 Suicide &amp; Crisis Lifeline</h2>
-        <div className="grid-2">
-          <a className="btn btn--danger" href="tel:988">Call 988</a>
-          <a className="btn" href="sms:988">Text 988</a>
-        </div>
-        <a className="small" href="https://988lifeline.org/chat/" target="_blank" rel="noreferrer">Or chat online at 988lifeline.org</a>
-      </div>
+        <section className="pcard pcard--crisis" aria-labelledby="c988">
+          <h2 id="c988">Call or text 988</h2>
+          <p>Free, confidential support, 24/7 (Suicide &amp; Crisis Lifeline, US).</p>
+          <div className="btn-row">
+            <a className="btn btn--danger" href="tel:988">Call 988</a>
+            <a className="btn btn--outline-danger" href="sms:988">Text 988</a>
+            <a className="btn btn--outline-danger" href="https://988lifeline.org/chat/" target="_blank" rel="noreferrer">Chat online</a>
+          </div>
+        </section>
 
-      <div className="card card--soft">
-        <h3>Crisis Text Line</h3>
-        <p>Text <strong>HOME</strong> to <strong>741741</strong>.</p>
-        <a className="btn btn--sm" href="sms:741741?body=HOME">Open messages</a>
-      </div>
+        <section className="pcard">
+          <h2>In immediate danger?</h2>
+          <p>Call <a href="tel:911">911</a> or go to the nearest emergency room.</p>
+        </section>
 
-      <div className="card card--soft">
-        <h3>In immediate danger?</h3>
-        <p>Call 911 or go to the nearest emergency room.</p>
-        <a className="btn btn--sm" href="tel:911">Call 911</a>
-      </div>
-
-      <Link to={signedIn ? '/home' : '/'} className="btn btn--ghost btn--block">Back to {signedIn ? 'Home' : 'start'}</Link>
-    </Shell>
+        <section className="pcard pcard--muted">
+          <h2>Need a moment first?</h2>
+          <p>Try 60 seconds of slow breathing.</p>
+          <Link to="/breathe" className="btn btn--outline" style={{ alignSelf: 'flex-start' }}>Start breathing</Link>
+        </section>
+      </main>
+    </PublicLayout>
   );
 }

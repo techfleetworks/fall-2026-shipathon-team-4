@@ -1,6 +1,7 @@
 import { formatDate } from './dates';
 import type { AppData } from './store';
 import { selectLatestSummary, selectUpcomingVisit } from './store';
+import { APP_NAME } from './brand';
 
 /** Plain-text version of the brief/case for the share sheet or clipboard. */
 export function caseAsText(s: AppData): string {
@@ -18,7 +19,7 @@ export function caseAsText(s: AppData): string {
     latest.fields.forEach((f) => f.clinical !== 'Not discussed' && lines.push(`- ${f.label}: ${f.clinical}`));
   }
   if (visit?.askingFor.length) lines.push('', `Asking for: ${visit.askingFor.join(', ')}`);
-  lines.push('', 'Prepared by the patient with Get Heard. Patient-reported.');
+  lines.push('', `Prepared by the patient with ${APP_NAME}. Patient-reported.`);
   if (s.demoMode) lines.push('Synthetic — illustrative only, not medical advice.');
   return lines.join('\n');
 }

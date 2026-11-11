@@ -1,0 +1,18 @@
+{
+  // Type-checks the backend (server/, api/) with Node types and no browser (DOM) types,
+  // so browser-only code can't slip into the server by accident.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "types": ["node"]
+  },
+  "include": ["server", "api"]
+}

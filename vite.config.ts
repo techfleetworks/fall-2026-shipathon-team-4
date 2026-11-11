@@ -3,14 +3,18 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // In local development, forward /api requests to the Express server (`npm run dev:api`).
+  server: {
+    proxy: { '/api': 'http://localhost:3001' },
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'Get Heard',
-        short_name: 'Get Heard',
+        name: 'Appointment Ready',
+        short_name: 'Appt Ready',
         description: 'Tell your story in your own words. Walk into your visit with a one-page brief.',
         theme_color: '#1F6B63',
         background_color: '#F5F2EB',
@@ -24,6 +28,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
+        // Never answer API addresses with the offline app shell.
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],

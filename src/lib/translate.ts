@@ -8,37 +8,42 @@
  * Guardrail (PRD §6.0): we only translate symptoms into terms. We never say the
  * patient HAS a condition and never suggest medication changes.
  */
-import type { FieldKey, StoryDraft, SummaryField } from './types';
+import type { FieldKey, StoryDraft, SummaryField } from './types.js';
+// .js extension: this file also runs on the server (Node ES modules); Vite maps it to .ts.
+import { DISCLAIMERS } from './guardrails/copy.js';
 
 interface Pair {
   match: RegExp;
   clinical: string;
+  /** Plain-language area, used as the line label in the quick-try preview. */
+  area: string;
 }
 
 // Order matters only for display; all matches are collected.
 export const TRANSLATION_PAIRS: Pair[] = [
-  { match: /crawl out of my skin|can'?t sit still|restless|pacing/i, clinical: 'Akathisia (inner restlessness, often medication-related)' },
-  { match: /zombie|drows(y|iness)|sleepy|sedat|groggy|falling asleep|nod(ding)? off/i, clinical: 'Over-sedation / excessive daytime somnolence' },
-  { match: /\bflat\b|numb|nothing touches me|can'?t feel anything/i, clinical: 'Emotional blunting / blunted affect' },
-  { match: /hands? shak|shaky|tremor|\bstiff/i, clinical: 'Extrapyramidal symptoms (tremor, rigidity)' },
-  { match: /can'?t get out of bed|everything (is|feels) heavy|no energy|exhausted|drained|wiped out/i, clinical: 'Psychomotor slowing; low energy (anergia)' },
-  { match: /mind won'?t stop|racing thoughts|thoughts (are )?racing/i, clinical: 'Racing thoughts' },
-  { match: /\bdown\b|low mood|\bsad\b|depress|hopeless|empty/i, clinical: 'Depressed mood' },
-  { match: /lost interest|nothing (is )?fun|don'?t enjoy|no joy|stopped caring/i, clinical: 'Anhedonia (loss of interest or pleasure)' },
-  { match: /can'?t (fall )?sleep|up at \d|awake at night|insomnia|wake up (at|in the middle)/i, clinical: 'Insomnia; sleep disturbance' },
-  { match: /fog|forget|can'?t (focus|concentrate|think)/i, clinical: 'Cognitive dulling ("brain fog")' },
-  { match: /dizzy|light-?headed|room tilts|stand(ing)? up/i, clinical: 'Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing)' },
-  { match: /stopped taking|skipp(ed|ing) (my )?(meds|doses|pills)/i, clinical: 'Medication non-adherence (shared for safety, not blame)' },
-  { match: /heart (races|racing|pounds|pounding)|sweaty|panic/i, clinical: 'Autonomic / panic-type symptoms' },
-  { match: /gain(ed)? (a lot of )?weight|weight gain|put on weight/i, clinical: 'Weight gain (metabolic change)' },
-  { match: /appetite|not eating|eating (too much|more|less)/i, clinical: 'Appetite change' },
-  { match: /worr(y|ied|ying)|anxious|on edge|nervous|can'?t relax/i, clinical: 'Excessive worry / anxiety symptoms' },
-  { match: /all in my head|dramatic|just the depression|just anxiety|brushed off|dismiss/i, clinical: 'Patient-reported dismissal at a previous visit' },
-  { match: /don'?t feel like myself/i, clinical: 'Non-specific change from usual self (worth exploring with your clinician)' },
+  { match: /crawl out of my skin|can'?t sit still|restless|pacing/i, clinical: 'Akathisia (inner restlessness, often medication-related)', area: 'Restlessness' },
+  { match: /zombie|drows(y|iness)|sleepy|sedat|groggy|falling asleep|nod(ding)? off/i, clinical: 'Over-sedation / excessive daytime somnolence', area: 'Sleepiness' },
+  { match: /\bflat\b|numb|nothing touches me|can'?t feel anything/i, clinical: 'Emotional blunting / blunted affect', area: 'Feelings' },
+  { match: /hands? shak|shaky|tremor|\bstiff/i, clinical: 'Extrapyramidal symptoms (tremor, rigidity)', area: 'Movement' },
+  { match: /can'?t get out of bed|everything (is|feels) heavy|no energy|exhausted|drained|wiped out/i, clinical: 'Psychomotor slowing, low energy (anergia)', area: 'Energy' },
+  { match: /mind won'?t stop|racing thoughts|thoughts (are )?racing/i, clinical: 'Racing thoughts', area: 'Thoughts' },
+  { match: /\bdown\b|low mood|\bsad\b|depress|hopeless|empty/i, clinical: 'Depressed mood', area: 'Mood' },
+  { match: /lost interest|nothing (is )?fun|don'?t enjoy|no joy|stopped caring/i, clinical: 'Anhedonia (loss of interest or pleasure)', area: 'Interest' },
+  { match: /can'?t (fall )?sleep|up at \d|awake at night|insomnia|wake up (at|in the middle)/i, clinical: 'Insomnia / sleep disturbance', area: 'Sleep' },
+  { match: /fog|forget|can'?t (focus|concentrate|think)/i, clinical: 'Cognitive dulling ("brain fog")', area: 'Thinking' },
+  { match: /dizzy|light-?headed|room tilts|stand(ing)? up/i, clinical: 'Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing)', area: 'Dizziness' },
+  { match: /stopped taking|skipp(ed|ing) (my )?(meds|doses|pills)/i, clinical: 'Medication non-adherence (shared for safety, not blame)', area: 'Medication' },
+  { match: /heart (races|racing|pounds|pounding)|sweaty|panic/i, clinical: 'Autonomic / panic-type symptoms', area: 'Body' },
+  { match: /gain(ed)? (a lot of )?weight|weight gain|put on weight/i, clinical: 'Weight gain (metabolic change)', area: 'Weight' },
+  { match: /appetite|not eating|eating (too much|more|less)/i, clinical: 'Appetite change', area: 'Appetite' },
+  { match: /worr(y|ied|ying)|anxious|on edge|nervous|can'?t relax/i, clinical: 'Excessive worry / anxiety symptoms', area: 'Worry' },
+  { match: /all in my head|dramatic|just the depression|just anxiety|brushed off|dismiss/i, clinical: 'Patient-reported dismissal at a previous visit', area: 'Past visits' },
+  { match: /stopped seeing (my )?friends|pull(ing|ed) away|isolat|avoid(ing)? (people|friends)|don'?t want to see anyone|stay(ing)? in (all|my room)/i, clinical: 'Social withdrawal', area: 'Social' },
+  { match: /don'?t feel like myself/i, clinical: 'Non-specific change from usual self (worth exploring with your clinician)', area: 'General' },
 ];
 
 export const ONSET_CHOICES = ['Less than 2 weeks', '2–4 weeks', '1–3 months', '3–6 months', 'More than 6 months'];
-export const FREQUENCY_CHOICES = ['Every day', 'A few times a week', 'Weekly', 'Comes and goes'];
+export const FREQUENCY_CHOICES = ['Every day', 'Most days', 'Weekly', 'Comes and goes'];
 export const IMPACT_CHOICES = ['Work or school', 'Sleep', 'Relationships', 'Taking care of myself', 'Getting around'];
 export const TRIGGER_CHOICES = ['After a dose', 'Standing up', 'Stress', 'Mornings', 'Evenings', 'Not sure'];
 export const TRIED_CHOICES = ['Medication', 'Therapy', 'Sleep changes', 'Exercise', 'Nothing yet'];
@@ -53,6 +58,7 @@ const ONSET_CLINICAL: Record<string, string> = {
 
 const FREQUENCY_CLINICAL: Record<string, string> = {
   'Every day': 'Daily (7 days / week)',
+  'Most days': '5–6 days / week',
   'A few times a week': '3–5 days / week',
   Weekly: '~1 day / week',
   'Comes and goes': 'Episodic / intermittent',
@@ -130,4 +136,26 @@ export function translateStory(d: StoryDraft): SummaryField[] {
   ];
 }
 
-export const DISCLAIMER = 'Questions to discuss with your clinician — not a diagnosis or medical advice.';
+// Product's exact short disclaimer (Copy Drafts §3), kept in one place: src/lib/guardrails/copy.ts.
+export const DISCLAIMER = DISCLAIMERS.short.body;
+
+export interface QuickLine {
+  label: string;
+  text: string;
+}
+
+/**
+ * Quick-try preview (onboarding O5): one free-text answer → labelled
+ * doctor-terms lines, updated live as the person types.
+ */
+export function quickTranslate(text: string): QuickLine[] {
+  const t = text.trim();
+  if (!t) return [];
+  const lines: QuickLine[] = [];
+  for (const p of TRANSLATION_PAIRS) if (p.match.test(t)) lines.push({ label: p.area, text: p.clinical });
+  const exact = durationFromText(t);
+  if (exact) lines.push({ label: 'Duration', text: `ongoing, ~${exact}` });
+  else if (/\b(months|a long time|forever|ages)\b/i.test(t)) lines.push({ label: 'Duration', text: 'ongoing, several months' });
+  else if (/\bweeks\b/i.test(t)) lines.push({ label: 'Duration', text: 'ongoing, several weeks' });
+  return lines;
+}

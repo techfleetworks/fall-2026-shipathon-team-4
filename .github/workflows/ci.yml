@@ -1,0 +1,42 @@
+# Runs on every pull request and on main: type check (app + server), unit/API tests, Gherkin scenarios,
+# and the production build. If any step fails, the check fails, so a change that breaks a guardrail,
+# the crisis rules or the API is caught before merge.
+# Security (OWASP GitHub Actions guidance): read-only token, actions pinned to full commit SHAs,
+# no pull_request_target, no secrets used.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Type check, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies (exact versions from package-lock.json)
+        run: npm ci
+      - name: Type check (app + server)
+        run: npm run typecheck
+      - name: Unit and API tests
+        run: npm run test:unit
+      - name: Gherkin scenarios (BDD)
+        run: npm run test:bdd
+      - name: Production build
+        run: npx vite build

@@ -52,3 +52,12 @@ export const IconArrow = (p: SVGProps<SVGSVGElement>) => (
 export const IconGrip = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M5 9h14M5 15h14" /></svg>
 );
+export const IconCalendar = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+);
+export const IconBook = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5M9 8h6" /></svg>
+);
+export const IconGear = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" /></svg>
+);

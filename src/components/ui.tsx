@@ -68,3 +68,37 @@ export function useToast(): [ReactNode, (msg: string) => void] {
   }, [msg]);
   return [msg ? <div className="toast" role="status">{msg}</div> : null, setMsg];
 }
+
+/**
+ * Two-step button with an in-page "Are you sure?" instead of window.confirm(),
+ * which some browsers and installed apps block (it silently returns false).
+ */
+export function ConfirmButton({
+  children,
+  question,
+  confirmLabel,
+  onConfirm,
+  className = 'btn btn--sm',
+  ariaLabel,
+}: {
+  children: ReactNode;
+  question: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return <button type="button" className={className} aria-label={ariaLabel} onClick={() => setAsking(true)}>{children}</button>;
+  }
+  return (
+    <div className="confirm-inline" role="alertdialog" aria-label={question}>
+      <span className="small"><strong>{question}</strong></span>
+      <div className="row row--wrap">
+        <button type="button" className="btn btn--sm btn--outline" autoFocus onClick={() => setAsking(false)}>Cancel</button>
+        <button type="button" className="btn btn--sm btn--danger" onClick={() => { setAsking(false); onConfirm(); }}>{confirmLabel}</button>
+      </div>
+    </div>
+  );
+}

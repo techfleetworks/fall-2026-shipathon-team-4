@@ -1,4 +1,4 @@
-# Get Heard (fall-2026-shipathon-team-4)
+# Appointment Ready (fall-2026-shipathon-team-4)
 
 A progressive web app that helps people with depression and anxiety tell their story in their own words, see it in doctor terms, and walk into a visit with a one-page brief.
 
@@ -38,3 +38,18 @@ Landing · Onboarding (who / what brings you / privacy & consent / name / next v
 - Supabase auth + storage (RLS, hard delete), then real share links and push reminders.
 - "In the room" transcript paste/upload and the after-visit summary (F5/F8), plus the lab/note explainer (F9).
 - Clinical and PM review of the script and playbook copy (`src/data/`).
+
+## Backend (API)
+
+An Express server in `server/app.ts`, deployed on Vercel as a serverless function (`api/index.ts`) on the same
+address as the app. It runs the doctor-terms engine and guardrails (`POST /api/prep-summary`) and transcript
+intake (`POST /api/transcripts`). It stores nothing and never logs request bodies.
+
+```bash
+npm run dev       # app
+npm run dev:api   # API server, in a second terminal (the app forwards /api to it)
+npm test          # unit, API and Gherkin tests (CI runs these on every PR)
+```
+
+- **Frontend guide:** [`docs/API.md`](docs/API.md): what to send, what comes back, and the crisis rules every screen keeps.
+- **Decisions:** `docs/adr/` (ADR-002 transcript intake, ADR-003 Express on Vercel, ADR-004 guardrails).
