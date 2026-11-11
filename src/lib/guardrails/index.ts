@@ -9,6 +9,8 @@ export {
   CRISIS_DETECTED_RESOURCES,
   CRISIS_HANDOFF,
   HELP_HEADING,
+  HELP_PAGE_FOOTER,
+  HELP_PAGE_FOOTER_LINE,
   HELP_RESOURCES,
   crisisMessageText,
   disclaimerText,

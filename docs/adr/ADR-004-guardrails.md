@@ -59,7 +59,7 @@ or the crisis-first step makes 7 tests fail.
    suicidal intent is typed anywhere, the app surfaces 988 directly (first, under a gentle handoff), never folds
    it into a brief, and uses no active-rescue or police framing. This supersedes the Copy Drafts' peer-only
    crisis message (Nov 9), which was removed. Content lives in `src/lib/guardrails/copy.ts`; the API's crisis
-   response uses the same content. Footer, menu and onboarding keep the existing 988 link (unchanged from main).
+   response uses the same content. Every other page keeps the existing "Call or text 988" footer; the Help page's own footer shows the Copy Drafts short line (Trans Lifeline · Wildflower Alliance · warmline.org), per the team (Nov 11). That footer is the only place police are mentioned; the handoff and cards have none.
    **Gap fixed:** "Skip - I am not sure" in Tell my story skipped the crisis check, so typed crisis text could
    reach the summary and brief. Skip now runs the check, and `storyDraftHasCrisis()` is a backstop before any
    summary is built. Tests cover 8 phrasings × 7 story steps.

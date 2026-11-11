@@ -126,6 +126,26 @@ export const CRISIS_HANDOFF = {
   notSaved: 'We paused here. What you just wrote was not saved.',
 } as const;
 
+/**
+ * Footer on the Help page only: the "Short version (footer / inline)" from the Copy Drafts §3, as the team
+ * asked (Nov 11). Every other page keeps the regular "Call or text 988" footer. This one line is the only
+ * place police are mentioned; the handoff and resource cards stay free of police/rescue framing.
+ * Numbers verified by Product Nov 2026; re-verify before relying.
+ */
+export const HELP_PAGE_FOOTER = {
+  lead: 'Want to talk to someone who won’t call the police or send anyone?',
+  links: [
+    { name: 'Trans Lifeline', label: '877-565-8860', href: 'tel:+18775658860' },
+    { name: 'Wildflower Alliance', label: '888-407-4515', href: 'tel:+18884074515' },
+  ],
+  more: { prefix: 'more at', label: 'warmline.org', href: 'https://warmline.org/directory' },
+} as const;
+
+/** The footer's second line as plain text, exactly as written in the Copy Drafts. */
+export const HELP_PAGE_FOOTER_LINE =
+  HELP_PAGE_FOOTER.links.map((l) => `${l.name} ${l.label}`).join(' · ') +
+  ` · ${HELP_PAGE_FOOTER.more.prefix} ${HELP_PAGE_FOOTER.more.label}`;
+
 /** The handoff plus resources as plain text (for the API and anywhere without rich layout). */
 export function crisisMessageText(): string {
   const items = CRISIS_DETECTED_RESOURCES.map(

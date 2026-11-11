@@ -17,7 +17,7 @@ export function Help({ detected = false }: { detected?: boolean }) {
   const resources = detected ? CRISIS_DETECTED_RESOURCES : HELP_RESOURCES;
 
   return (
-    <Shell header={{ kind: 'sub', title: 'Help', back: 'history', right: <span /> }}>
+    <Shell header={{ kind: 'sub', title: 'Help', back: 'history', right: <span /> }} footer="peer">
       {detected ? (
         <>
           <h1>{CRISIS_HANDOFF.title}</h1>

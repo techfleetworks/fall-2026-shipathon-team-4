@@ -10,6 +10,8 @@ import {
   CRISIS_HANDOFF,
   CRISIS_SENTINEL,
   HELP_HEADING,
+  HELP_PAGE_FOOTER,
+  HELP_PAGE_FOOTER_LINE,
   HELP_RESOURCES,
   crisisMessageText,
   storyDraftHasCrisis,
@@ -73,6 +75,12 @@ describe('help page and crisis handoff (team decision)', () => {
     expect(CRISIS_DETECTED_RESOURCES[0]!.id).toBe('988');
     expect(CRISIS_DETECTED_RESOURCES[0]!.actions.map((a) => a.href)).toEqual(['tel:988', 'sms:988', 'https://988lifeline.org/chat/']);
     expect(new Set(CRISIS_DETECTED_RESOURCES.map((r) => r.id))).toEqual(new Set(HELP_RESOURCES.map((r) => r.id)));
+  });
+
+  it('gives the Help page the exact Copy Drafts short footer, with tel: links matching the numbers', () => {
+    expect(HELP_PAGE_FOOTER.lead).toBe('Want to talk to someone who won’t call the police or send anyone?');
+    expect(HELP_PAGE_FOOTER_LINE).toBe('Trans Lifeline 877-565-8860 · Wildflower Alliance 888-407-4515 · more at warmline.org');
+    for (const l of HELP_PAGE_FOOTER.links) expect(l.href).toBe('tel:+1' + l.label.replace(/-/g, ''));
   });
 
   it('keeps the handoff gentle: no active-rescue or police framing anywhere', () => {

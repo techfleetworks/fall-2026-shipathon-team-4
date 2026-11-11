@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../lib/store';
+import { HELP_PAGE_FOOTER } from '../lib/guardrails/copy';
 import { IconBack, IconCase, IconClose, IconHome, IconPeers, IconScript, IconStory } from './Icons';
 
 const TABS = [
@@ -19,7 +20,8 @@ type HeaderSpec =
 interface ShellProps {
   header: HeaderSpec;
   tabs?: boolean;
-  footer?: 'help' | 'prepared' | 'prepared+help';
+  /** 'peer' = the Help page's own footer (short peer-support line); every other page uses 'help'. */
+  footer?: 'help' | 'peer' | 'prepared' | 'prepared+help';
   wide?: boolean;
   children: ReactNode;
 }
@@ -40,7 +42,27 @@ export function Shell({ header, tabs = false, footer = 'help', wide = false, chi
           <div className="prepared">Prepared by the patient with Get Heard. Patient-reported.</div>
         )}
         {(footer === 'help' || footer === 'prepared+help') && <HelpBar />}
+        {footer === 'peer' && <PeerSupportBar />}
       </div>
+    </div>
+  );
+}
+
+/** Help page footer: Copy Drafts §3 short version. Text lives in src/lib/guardrails/copy.ts. */
+function PeerSupportBar() {
+  const { lead, links, more } = HELP_PAGE_FOOTER;
+  return (
+    <div className="helpbar">
+      <p className="helpbar__lead">{lead}</p>
+      <p className="helpbar__line">
+        {links.map((l) => (
+          <span key={l.href}>
+            {l.name} <a href={l.href}>{l.label}</a> ·{' '}
+          </span>
+        ))}
+        {more.prefix}{' '}
+        <a href={more.href} target="_blank" rel="noreferrer">{more.label}</a>
+      </p>
     </div>
   );
 }
