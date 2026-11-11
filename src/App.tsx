@@ -21,6 +21,7 @@ import { PrivacyPromise } from './screens/public/PrivacyPromise';
 import { Faq } from './screens/public/Faq';
 import { Legal } from './screens/public/Legal';
 import { Auth } from './screens/public/Auth';
+import { PiecesDemo } from './screens/demo/PiecesDemo';
 
 function RequireOnboarded() {
   const signedIn = useApp(selectSignedIn);
@@ -128,6 +129,8 @@ export function App() {
           <Route path="/peers/:id" element={<PeerRedirect />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/:section" element={<Settings />} />
+          {/* Backend drop-in pieces, until the design places them (not in the main navigation) */}
+          <Route path="/demo/pieces" element={<PiecesDemo />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

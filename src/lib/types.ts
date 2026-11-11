@@ -129,7 +129,7 @@ export interface Visit {
   /** A3: quick notes typed during the visit. */
   notes?: string;
   /** F1: recap in plain words. */
-  recap?: { doctorSaid: string[]; source: 'recording' | 'notes'; updatedAt: string };
+  recap?: { doctorSaid: string[]; source: 'recording' | 'notes' | 'transcript'; updatedAt: string };
   checkIn?: CheckIn;
 }
 

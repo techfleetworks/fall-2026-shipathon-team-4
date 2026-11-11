@@ -15,9 +15,11 @@ import {
   ONSET_CHOICES,
   TRIED_CHOICES,
   TRIGGER_CHOICES,
-  translateStory,
 } from '../../lib/translate';
-import type { FieldKey, StoryDraft, SummaryField, Visit } from '../../lib/types';
+import { requestPrepSummary } from '../../lib/api';
+import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
+import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
+import type { FieldKey, StoryDraft, Visit } from '../../lib/types';
 import { Priorities, suggestionsFrom } from '../Brief';
 import { ShareLinkRow, linkUrl } from '../Visits';
 import { formatTime, Modal, useVisitParam, VisitLayout } from './common';
@@ -46,11 +48,18 @@ function withText(d: StoryDraft, q: number, text: string): Partial<StoryDraft> {
   return { tried: { ...d.tried, text } };
 }
 
-export function fieldsWithOverrides(d: StoryDraft): SummaryField[] {
-  return translateStory(d).map((f) => {
-    const o = d.overrides?.[f.key];
-    return o !== undefined ? { ...f, clinical: o || 'Not discussed', editedByPatient: true } : f;
-  });
+/** Story with crisis text removed from every free-text answer (not just the current question). */
+function withoutCrisisText(d: StoryDraft): Partial<StoryDraft> {
+  const clean = (t: string) => (hasCrisisLanguage(t) ? '' : t);
+  return {
+    opening: clean(d.opening),
+    onset: { ...d.onset, text: clean(d.onset.text) },
+    frequency: { ...d.frequency, text: clean(d.frequency.text) },
+    severity: { ...d.severity, text: clean(d.severity.text) },
+    triggers: { ...d.triggers, text: clean(d.triggers.text) },
+    tried: { ...d.tried, text: clean(d.tried.text), outcome: clean(d.tried.outcome), medName: clean(d.tried.medName), medDose: clean(d.tried.medDose), medDuration: clean(d.tried.medDuration) },
+    overrides: {},
+  };
 }
 
 export function NameHowIFeel() {
@@ -66,23 +75,44 @@ export function NameHowIFeel() {
   const text = textOf(draft, q);
   const { supported, listening, buttonProps } = useSpeechInput(text, (v) => update(withText(useDraft.getState().draft, q, v)));
   const crisis = hasCrisisLanguage(text) || Object.values(draft.overrides ?? {}).some((o) => hasCrisisLanguage(o));
-  const fields = useMemo(() => fieldsWithOverrides(draft), [draft]);
+  // "Your doctor reads" comes from the backend server (engine + guardrails run there), after a short pause in typing.
+  const preview = useServerSummary(draft);
+  const fields = useMemo(() => applyOverrides(preview.fields, draft.overrides), [preview.fields, draft.overrides]);
+  // Crisis anywhere in the story (any question, any rewrite), not just the question on screen.
+  const anyCrisis = storyDraftHasCrisis(draft);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editing, setEditing] = useState<FieldKey | null>(null);
 
   if (!visit) return <Navigate to="/visits" replace />;
 
   const toHelp = () => {
-    update({ ...withText(draft, q, ''), overrides: {} });
+    update(withoutCrisisText(useDraft.getState().draft));
     navigate('/help/now', { replace: true });
   };
-  const next = () => {
-    if (crisis) return toHelp();
+  const next = async () => {
+    if (crisis || anyCrisis) return toHelp();
     if (q < 5) return setQ(q + 1);
-    const hasAnything = fields.some((f) => f.clinical !== 'Not discussed') || draft.opening.trim();
-    if (!hasAnything) return navigate(`/visits/${visit.id}/before/summary`);
-    saveSummary({ opening: draft.opening.trim(), fields });
+    // Save: ask the server once more so what's saved matches the latest answers, never a stale preview.
+    setSaving(true);
+    setSaveError(null);
+    const current = useDraft.getState().draft;
+    const { overrides, ...engineInput } = current;
+    const out = await requestPrepSummary(engineInput as StoryDraft);
+    setSaving(false);
+    if (out.status === 'crisis') return toHelp();
+    if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(`/visits/${visit.id}/before/summary`);
+    if (out.status === 'blocked') return setSaveError(out.message);
+    if (out.status !== 'ok') return setSaveError(out.status === 'rejected' ? out.error.message : out.message);
+    saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides) });
     reset();
     navigate(`/visits/${visit.id}/before/summary`);
+  };
+  // Skip runs the same crisis check as Next, so typed crisis text can never ride into the summary or brief.
+  const skip = () => {
+    if (crisis || anyCrisis) return toHelp();
+    if (q < 5) return setQ(q + 1);
+    void next();
   };
 
   return (
@@ -147,10 +177,13 @@ export function NameHowIFeel() {
 
           <div className="ob-actions">
             {q > 1 && <button className="btn btn--outline" onClick={() => setQ(q - 1)}>Back</button>}
-            <button className="link-btn" onClick={() => (q < 5 ? setQ(q + 1) : next())}>Skip, I’m not sure</button>
+            <button className="link-btn" onClick={skip}>Skip, I’m not sure</button>
             <span className="spacer" />
-            <button className="btn btn--primary" onClick={next}>{q < 5 ? 'Next question' : 'Looks right, save'}</button>
+            <button className="btn btn--primary" onClick={() => void next()} disabled={saving} aria-busy={saving}>
+              {q < 5 ? 'Next question' : saving ? 'Saving…' : 'Looks right, save'}
+            </button>
           </div>
+          {saveError && <p className="note" role="alert">{saveError}</p>}
           {latest && q === 1 && !draft.opening && (
             <p className="small muted">Your last story was saved {formatDate(toISODate(new Date(latest.createdAt)))}. Telling it again adds an update.</p>
           )}
@@ -158,6 +191,8 @@ export function NameHowIFeel() {
 
         <section className="panel panel--accent" aria-labelledby="reads">
           <span id="reads" className="eyebrow-soft">Your doctor reads · updates as you go</span>
+          {preview.status === 'loading' && <p className="note" role="status">Updating…</p>}
+          {(preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
           <div className="kv">
             {fields.map((f) => (
               <div key={f.key} className="kv__row">
