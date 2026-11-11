@@ -29,7 +29,7 @@ features receive input that has already been validated and crisis-checked.
 | Method and path | Result |
 |---|---|
 | `GET /api/health` | `200 { status: "ok", service, time }` |
-| `POST /api/transcripts` with `{ transcript, source? }` | `201 accepted + payload` · `200 crisis + peer-support resources, no payload` · `400 error` · `413` over 1 MB · `415` not JSON |
+| `POST /api/transcripts` with `{ transcript, source? }` | `201 accepted + payload` · `200 crisis + 988-first help, no payload` · `400 error` · `413` over 1 MB · `415` not JSON |
 | Anything else under `/api` | JSON `404` or `405` |
 
 ## Considered options
@@ -59,7 +59,7 @@ features receive input that has already been validated and crisis-checked.
 
 | Threat | Rank | Response | Executable check |
 |---|---|---|---|
-| Crisis text processed by the API | Critical | Eliminate: shared crisis check runs first; response carries peer-support resources and no payload | `@usecase:api-crisis-fixture`, unit test |
+| Crisis text processed by the API | Critical | Eliminate: shared crisis check runs first; response carries 988-first help and no payload | `@usecase:api-crisis-fixture`, unit test |
 | Oversized or non-JSON bodies | High | Mitigate: 1 MB parser limit, JSON-only, strict parsing | `@usecase:api-oversized`, `@usecase:api-not-json` |
 | Transcript leaking via errors or logs | High | Mitigate: fixed messages; error handler logs only the error type; bodies never logged | `@usecase:api-malformed-json`, unit test on console |
 | Responses cached by browsers or proxies | Medium | Mitigate: `Cache-Control: no-store` on every response | `@usecase:api-headers` |

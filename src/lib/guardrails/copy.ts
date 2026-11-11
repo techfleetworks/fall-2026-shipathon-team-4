@@ -52,61 +52,86 @@ export function disclaimerText(key: DisclaimerKey, appName: string): string {
 // ---------------------------------------------------------------- crisis response (ticket B3)
 
 /**
- * Crisis-response copy, exact wording from the Copy Drafts, Section 3 ("first-pass fixture").
- * STATUS: needs mentor sign-off. Routes only to peer support that won't contact police or emergency
- * services without consent (no automatic active rescue). Numbers verified by Product Nov 2026; re-verify
- * before relying. US-centric. Hours are not 24/7.
- * Open mentor decision: whether to also offer a clearly opt-in, user-initiated emergency option.
+ * Help-page and crisis-handoff content. Team decision (ADR-001 update, Nov 2026):
+ *  - Help page: "Places to start if you need help." Order: warmline directory → 988 → 911.
+ *    No breathing card. 988 is a neutral card labelled "for when you're in crisis" ("Free, 24/7").
+ *    911 is the red emergency card.
+ *  - If self-harm or suicidal intent is typed anywhere, the app surfaces 988/crisis support directly
+ *    (not just the footer) and never folds it into a brief. Gentle handoff, no active-rescue or police framing.
+ * Re-verify every number and link before launch. US-only.
  */
-export interface CrisisResource {
-  name: string;
-  /** Display form, e.g. "877-565-8860". */
-  phone?: string;
-  /** For tel: links. */
-  tel?: string;
-  url?: string;
-  urlLabel?: string;
-  note: string;
+export type HelpResourceId = 'warmline' | '988' | '911';
+
+export interface HelpAction {
+  label: string;
+  href: string;
+  external?: boolean;
 }
 
-export const CRISIS_RESOURCES: readonly CrisisResource[] = [
-  {
-    name: 'Trans Lifeline',
-    phone: '877-565-8860',
-    tel: '+18775658860',
-    note: 'Peer support; does not contact 911 or police without your consent.',
-  },
-  {
-    name: 'Wildflower Alliance Peer Support Line',
-    phone: '888-407-4515',
-    tel: '+18884074515',
-    note: 'Peer-run; doesn’t assess, report, or call the police (evenings, ET).',
-  },
-  {
-    name: 'Find a warmline near you',
-    url: 'https://warmline.org/directory',
-    urlLabel: 'warmline.org/directory',
-    note: 'Free, peer-run emotional support lines.',
-  },
-];
+export interface HelpResource {
+  id: HelpResourceId;
+  title: string;
+  /** Short label above the title, e.g. "For when you’re in crisis". */
+  label?: string;
+  body: string;
+  actions: readonly HelpAction[];
+  /** 'neutral' = calm card; 'emergency' = the red card (911 only). */
+  tone: 'neutral' | 'emergency';
+}
 
-export const CRISIS_MESSAGE = {
-  title: 'It sounds like you’re carrying something really heavy right now.',
-  intro:
-    'You don’t have to go through it alone — and you don’t have to do anything you’re not ready for. Reaching out is your choice, whenever and however you want. If it would help to talk to someone who gets it, here are people you can reach who won’t call the police or send anyone unless you ask them to:',
-  closing: 'You can keep talking here, or close this and come back anytime. We’re not going anywhere.',
+export const HELP_HEADING = 'Places to start if you need help.';
+
+const WARMLINE: HelpResource = {
+  id: 'warmline',
+  title: 'Find a warmline near you',
+  body: 'Free, peer-run emotional support lines.',
+  actions: [{ label: 'warmline.org/directory', href: 'https://warmline.org/directory', external: true }],
+  tone: 'neutral',
+};
+
+const LIFELINE_988: HelpResource = {
+  id: '988',
+  title: '988 Suicide & Crisis Lifeline',
+  label: 'For when you’re in crisis',
+  body: 'Free, 24/7',
+  actions: [
+    { label: 'Call 988', href: 'tel:988' },
+    { label: 'Text 988', href: 'sms:988' },
+    { label: 'Chat online', href: 'https://988lifeline.org/chat/', external: true },
+  ],
+  tone: 'neutral',
+};
+
+const EMERGENCY_911: HelpResource = {
+  id: '911',
+  title: 'In immediate danger?',
+  body: 'Call 911 or go to the nearest emergency room.',
+  actions: [{ label: 'Call 911', href: 'tel:911' }],
+  tone: 'emergency',
+};
+
+/** Help page order: warmline → 988 → 911. */
+export const HELP_RESOURCES: readonly HelpResource[] = [WARMLINE, LIFELINE_988, EMERGENCY_911];
+
+/**
+ * When crisis language was typed, 988 is surfaced directly: first, right under the handoff.
+ * (Team rule: "surface 988/crisis support directly." The general page keeps warmline first.)
+ */
+export const CRISIS_DETECTED_RESOURCES: readonly HelpResource[] = [LIFELINE_988, WARMLINE, EMERGENCY_911];
+
+/** Gentle handoff shown when crisis language is detected. The app's existing wording; no police or rescue framing. */
+export const CRISIS_HANDOFF = {
+  title: 'You don’t have to go through this alone.',
+  body: 'It sounds like things might be really hard right now. People are ready to talk with you, any time, for free.',
+  notSaved: 'We paused here. What you just wrote was not saved.',
 } as const;
 
-/** Short version for the footer / inline. */
-export const CRISIS_SHORT = {
-  lead: 'Want to talk to someone who won’t call the police or send anyone?',
-  line: 'Trans Lifeline 877-565-8860 · Wildflower Alliance 888-407-4515 · more at warmline.org',
-} as const;
-
-/** The full crisis message as one plain-text block (for the API and anywhere without rich layout). */
+/** The handoff plus resources as plain text (for the API and anywhere without rich layout). */
 export function crisisMessageText(): string {
-  const items = CRISIS_RESOURCES.map((r) => `• ${r.name} — ${r.phone ?? r.urlLabel}. ${r.note}`).join('\n');
-  return `${CRISIS_MESSAGE.title} ${CRISIS_MESSAGE.intro}\n${items}\n${CRISIS_MESSAGE.closing}`;
+  const items = CRISIS_DETECTED_RESOURCES.map(
+    (r) => `• ${r.title}${r.label ? ` (${r.label.toLowerCase()})` : ''}: ${r.body}. ${r.actions.map((a) => a.label).join(' · ')}`,
+  ).join('\n');
+  return `${CRISIS_HANDOFF.title} ${CRISIS_HANDOFF.body}\n${items}`;
 }
 
 /**

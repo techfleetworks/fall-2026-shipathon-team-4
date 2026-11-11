@@ -53,15 +53,20 @@ or the crisis-first step makes 7 tests fail.
 
 ## Open decisions (not decided here)
 
-1. **Crisis copy (ticket B3) — wired in, mentor sign-off still required.** At the team's direction (Nov 9), the
-   app and API now use the Copy Drafts crisis message, which routes only to peer support that won't contact
-   police without consent (Trans Lifeline, Wildflower Alliance, warmline.org). This replaced 988, Crisis Text
-   Line and a "Call 911" card on the crisis screen, the 988 footer, the menu label, the onboarding line and the
-   API's crisis response. Copy lives in `src/lib/guardrails/copy.ts`; tests fail if 988/911 come back.
-   **Still open for the mentor:** whether to add a clearly opt-in, user-initiated emergency option. Also:
-   re-verify the numbers before relying on them, the copy is US-centric, and the lines are not 24/7 (no
-   "open now" logic yet). ADR-001's "crisis banner (988/911)" should be updated to match.
-   The separate "Not for emergencies" disclaimer (medical emergencies → 911) is unchanged.
+1. **Help page and crisis handoff (ticket B3) — follows the team decision (ADR-001 update, Nov 10–11).**
+   Help page: "Places to start if you need help.", order warmline directory → 988 → 911, no breathing card, 988 a
+   neutral card "for when you're in crisis" ("Free, 24/7"), 911 the red emergency card. When self-harm or
+   suicidal intent is typed anywhere, the app surfaces 988 directly (first, under a gentle handoff), never folds
+   it into a brief, and uses no active-rescue or police framing. This supersedes the Copy Drafts' peer-only
+   crisis message (Nov 9), which was removed. Content lives in `src/lib/guardrails/copy.ts`; the API's crisis
+   response uses the same content. Footer, menu and onboarding keep the existing 988 link (unchanged from main).
+   **Gap fixed:** "Skip - I am not sure" in Tell my story skipped the crisis check, so typed crisis text could
+   reach the summary and brief. Skip now runs the check, and `storyDraftHasCrisis()` is a backstop before any
+   summary is built. Tests cover 8 phrasings × 7 story steps.
+   **Open:** Diana's redesign (`feat/hifi-screens`) replaces this Help page and the story flow; it should adopt
+   `HELP_RESOURCES` / `CRISIS_DETECTED_RESOURCES` and keep the crisis check on every path (including skips).
+   Re-verify numbers and links before launch; US-only. "988 first when detected" is our reading of "surface 988
+   directly"; confirm with the team.
 2. **"This is AI — double-check it."** The engine isn't AI yet. Showing this line now would claim something we
    don't ship, so it's provided but should only be displayed once Claude is wired in.
 3. **Placement** of the long disclaimer, "not for emergencies" and onboarding lines in screens is frontend work.

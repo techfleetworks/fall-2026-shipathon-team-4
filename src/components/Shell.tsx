@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../lib/store';
-import { CRISIS_RESOURCES, CRISIS_SHORT, type CrisisResource } from '../lib/guardrails/copy';
 import { IconBack, IconCase, IconClose, IconHome, IconPeers, IconScript, IconStory } from './Icons';
 
 const TABS = [
@@ -46,18 +45,10 @@ export function Shell({ header, tabs = false, footer = 'help', wide = false, chi
   );
 }
 
-const [trans, wildflower, warmline] = CRISIS_RESOURCES as [CrisisResource, CrisisResource, CrisisResource];
-
 export function HelpBar() {
   return (
-    // Short crisis line from the Copy Drafts §3 (draft, needs mentor sign-off). Text lives in guardrails/copy.ts.
     <div className="helpbar">
-      <Link to="/help">{CRISIS_SHORT.lead}</Link>
-      <span className="helpbar__line">
-        {trans.name} <a href={`tel:${trans.tel}`}>{trans.phone}</a> · Wildflower Alliance{' '}
-        <a href={`tel:${wildflower.tel}`}>{wildflower.phone}</a> · more at{' '}
-        <a href={warmline.url} target="_blank" rel="noreferrer">warmline.org</a>
-      </span>
+      <Link to="/help">Need help now? Call or text 988</Link>
     </div>
   );
 }
@@ -136,7 +127,7 @@ function AccountMenu() {
         <div className="menu" role="menu" onClick={() => setOpen(false)}>
           <Link to="/visits" role="menuitem">Visits</Link>
           <Link to="/settings" role="menuitem">Settings & privacy</Link>
-          <Link to="/help" role="menuitem">Crisis support</Link>
+          <Link to="/help" role="menuitem">Crisis help (988)</Link>
         </div>
       )}
     </div>

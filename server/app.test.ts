@@ -59,9 +59,10 @@ describe('POST /api/transcripts', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: 'crisis', help: CRISIS_HELP });
     expect(JSON.stringify(res.body)).not.toContain('see the point');
-    // Peer support only (Copy Drafts §3): no 988 / 911 routing.
-    expect(res.body.help.resources.map((r: { name: string }) => r.name)).toContain('Trans Lifeline');
-    expect(JSON.stringify(res.body)).not.toMatch(/\b988\b|call 911/i);
+    // Team rule: surface 988 directly (first), then warmline, then 911. Gentle, no police/rescue framing.
+    expect(res.body.help.resources.map((r: { id: string }) => r.id)).toEqual(['988', 'warmline', '911']);
+    expect(res.body.help.message).toContain('988');
+    expect(JSON.stringify(res.body)).not.toMatch(/police|rescue|send (?:someone|anyone)/i);
   });
 
   it.each([

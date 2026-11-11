@@ -193,7 +193,8 @@ export function StoryStep() {
       )}
 
       <button className="btn btn--primary btn--block" onClick={next}>{step === TOTAL ? 'See it in doctor terms' : 'Next'}</button>
-      <button className="btn btn--block" onClick={() => go(step + 1)}>Skip - I am not sure</button>
+      {/* Skip runs the same crisis check as Next, so typed crisis text can never ride into the summary or brief. */}
+      <button className="btn btn--block" onClick={next}>Skip - I am not sure</button>
       {toast}
     </Shell>
   );

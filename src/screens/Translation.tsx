@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { Disclaimer } from '../components/ui';
+import { storyDraftHasCrisis } from '../lib/guardrails/enforce';
 import { hasCrisisLanguage } from '../lib/safety';
 import { useApp, useDraft } from '../lib/store';
 import { translateStory } from '../lib/translate';
@@ -14,6 +15,16 @@ export function Translation() {
   const [fields, setFields] = useState<SummaryField[]>(() => translateStory(draft));
   const [editing, setEditing] = useState<string | 'all' | null>(null);
 
+  // Backstop: crisis language anywhere in the story goes to crisis support and is never turned into a
+  // summary or brief, whatever path led here (Skip, Save and resume, back navigation).
+  const crisis = storyDraftHasCrisis(draft);
+  useEffect(() => {
+    if (!crisis) return;
+    reset();
+    navigate('/help/now', { replace: true });
+  }, [crisis, reset, navigate]);
+  if (crisis) return null;
+
   const isEmpty = fields.every((f) => f.clinical === 'Not discussed') && !draft.opening.trim();
   if (isEmpty) return <Navigate to="/story" replace />;
 
@@ -21,7 +32,8 @@ export function Translation() {
     setFields((fs) => fs.map((f) => (f.key === key ? { ...f, clinical, editedByPatient: true } : f)));
 
   const save = () => {
-    if (fields.some((f) => f.editedByPatient && hasCrisisLanguage(f.clinical))) {
+    if (storyDraftHasCrisis(draft) || fields.some((f) => hasCrisisLanguage(f.clinical, f.quote))) {
+      reset();
       navigate('/help/now', { replace: true });
       return;
     }

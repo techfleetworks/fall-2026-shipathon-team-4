@@ -6,11 +6,13 @@ import { TRANSLATION_PAIRS, matchSymptoms, translateStory } from '../translate';
 import type { StoryDraft } from '../types';
 import {
   BLOCKED_FALLBACK,
-  CRISIS_MESSAGE,
-  CRISIS_RESOURCES,
+  CRISIS_DETECTED_RESOURCES,
+  CRISIS_HANDOFF,
   CRISIS_SENTINEL,
-  CRISIS_SHORT,
+  HELP_HEADING,
+  HELP_RESOURCES,
   crisisMessageText,
+  storyDraftHasCrisis,
   DISCLAIMERS,
   GUARDRAIL_RULES,
   buildSystemPrompt,
@@ -57,34 +59,61 @@ describe('disclaimer copy', () => {
   });
 });
 
-describe('crisis copy (B3 draft)', () => {
-  it('routes only to the three peer resources from the Copy Drafts, never 988 or 911', () => {
-    expect(CRISIS_RESOURCES.map((r) => r.name)).toEqual([
-      'Trans Lifeline',
-      'Wildflower Alliance Peer Support Line',
-      'Find a warmline near you',
-    ]);
-    // No resource routes to 988, 911 or Crisis Text Line. ("does not contact 911" in a note is fine.)
-    for (const r of CRISIS_RESOURCES) {
-      expect(`${r.phone ?? ''} ${r.tel ?? ''} ${r.url ?? ''}`).not.toMatch(/988|911|741741/);
-    }
-    const all = JSON.stringify([CRISIS_RESOURCES, CRISIS_MESSAGE, CRISIS_SHORT, crisisMessageText()]);
-    expect(all).not.toMatch(/\b988\b|741741|call 911/i);
+describe('help page and crisis handoff (team decision)', () => {
+  it('orders the help page warmline → 988 → 911, with 988 neutral and 911 the only emergency card', () => {
+    expect(HELP_HEADING).toBe('Places to start if you need help.');
+    expect(HELP_RESOURCES.map((r) => r.id)).toEqual(['warmline', '988', '911']);
+    const r988 = HELP_RESOURCES.find((r) => r.id === '988')!;
+    expect(r988).toMatchObject({ label: 'For when you’re in crisis', body: 'Free, 24/7', tone: 'neutral' });
+    expect(HELP_RESOURCES.filter((r) => r.tone === 'emergency').map((r) => r.id)).toEqual(['911']);
+    expect(JSON.stringify(HELP_RESOURCES)).not.toMatch(/breath/i);
   });
 
-  it('keeps the exact numbers and wording, with tel: links that match the displayed numbers', () => {
-    expect(CRISIS_SHORT.line).toBe('Trans Lifeline 877-565-8860 · Wildflower Alliance 888-407-4515 · more at warmline.org');
-    expect(CRISIS_MESSAGE.title).toBe('It sounds like you’re carrying something really heavy right now.');
-    for (const r of CRISIS_RESOURCES.filter((x) => x.phone)) {
-      expect(r.tel).toBe('+1' + r.phone!.replace(/-/g, ''));
+  it('surfaces 988 directly (first) when crisis language is detected', () => {
+    expect(CRISIS_DETECTED_RESOURCES[0]!.id).toBe('988');
+    expect(CRISIS_DETECTED_RESOURCES[0]!.actions.map((a) => a.href)).toEqual(['tel:988', 'sms:988', 'https://988lifeline.org/chat/']);
+    expect(new Set(CRISIS_DETECTED_RESOURCES.map((r) => r.id))).toEqual(new Set(HELP_RESOURCES.map((r) => r.id)));
+  });
+
+  it('keeps the handoff gentle: no active-rescue or police framing anywhere', () => {
+    const all = JSON.stringify([CRISIS_HANDOFF, HELP_RESOURCES, crisisMessageText()]);
+    expect(all).not.toMatch(/police|rescue|send (?:someone|anyone)|welfare check|dispatch/i);
+    expect(crisisMessageText().startsWith(CRISIS_HANDOFF.title)).toBe(true);
+    expect(crisisMessageText()).toContain('988');
+  });
+});
+
+describe('crisis typed into the talk/type box is never folded into a brief', () => {
+  const PHRASES = [
+    "I don't see the point anymore",
+    'I want to hurt myself',
+    "I've been thinking about killing myself",
+    'I want to die',
+    "Sometimes I think everyone would be better off without me",
+    "I've been cutting myself again",
+    "I don't want to be here anymore",
+    'thinking about suicide',
+  ];
+  const STEPS: ((d: StoryDraft, t: string) => void)[] = [
+    (d, t) => { d.opening = t; },
+    (d, t) => { d.onset.text = t; },
+    (d, t) => { d.frequency.text = t; },
+    (d, t) => { d.severity.text = t; },
+    (d, t) => { d.triggers.text = t; },
+    (d, t) => { d.tried.text = t; },
+    (d, t) => { d.tried.outcome = t; },
+  ];
+
+  it.each(PHRASES)('detects %j in every step of the story', (phrase) => {
+    for (const put of STEPS) {
+      const d = draft('My meds make me drowsy');
+      put(d, phrase);
+      expect(storyDraftHasCrisis(d)).toBe(true);
     }
   });
 
-  it('builds the full message with every resource and the closing line', () => {
-    const text = crisisMessageText();
-    for (const r of CRISIS_RESOURCES) expect(text).toContain(r.note);
-    expect(text).toContain('877-565-8860');
-    expect(text.endsWith('We’re not going anywhere.')).toBe(true);
+  it('does not flag an ordinary story (no false alarm on Theo’s prep)', () => {
+    expect(storyDraftHasCrisis(draft(`${THEO_PREP.goal} ${THEO_PREP.noticing}`))).toBe(false);
   });
 });
 

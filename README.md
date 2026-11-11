@@ -24,7 +24,7 @@ An Express server in `server/app.ts`, deployed on Vercel as a serverless functio
 | Endpoint | What it does |
 |---|---|
 | `GET /api/health` | `{ "status": "ok" }` if the server is up |
-| `POST /api/transcripts` | Body `{ "transcript": "...", "source": "paste" }`. Runs the same checks as the app (crisis check first). `201` with the payload, `200` with peer-support resources and no payload for crisis language, `400` / `413` / `415` for bad input. Stores nothing. |
+| `POST /api/transcripts` | Body `{ "transcript": "...", "source": "paste" }`. Runs the same checks as the app (crisis check first). `201` with the payload, `200` with a gentle handoff and 988 first (no payload) for crisis language, `400` / `413` / `415` for bad input. Stores nothing. |
 
 ```bash
 curl -X POST http://localhost:3001/api/transcripts -H "Content-Type: application/json" \
@@ -40,7 +40,7 @@ No authentication or rate limiting yet, so don't add endpoints that cost money (
 | Stack | Vite + React 18 + TypeScript, React Router, Zustand, `vite-plugin-pwa` (offline app shell, installable) |
 | Data | **Local-only.** Approved records are stored in `localStorage`. The in-progress story draft is in `sessionStorage` and is discarded when the tab closes (ADR-001 Decision 5). No accounts. Visit transcripts are sent to the API (below) for processing and not stored there. |
 | Translation | **Rule-based** (`src/lib/translate.ts`), using the vocabulary from `translation_pairs.csv` plus the answers from the guided steps. Each clinical line keeps the patient's own words next to it, and anything missing reads "Not discussed". |
-| Safety | A keyword crisis check (`src/lib/safety.ts`) runs on every free-text input **before** translation. Flagged text is never saved, and the user is taken to peer-support resources that won’t call the police unless asked (Copy Drafts §3, pending mentor sign-off). It catches passive phrasing, including the Starter Pack safety fixture. |
+| Safety | A keyword crisis check (`src/lib/safety.ts`) runs on every free-text input **before** translation. Flagged text is never saved, and the user is taken straight to crisis support: a gentle handoff with 988 first, then the warmline directory and 911. The Help page ("Places to start if you need help.") lists warmline → 988 → 911. It catches passive phrasing, including the Starter Pack safety fixture. |
 | Voice | "Hold to talk" uses the browser's Web Speech API where it's available (Chrome, Safari). Typing always works. |
 | PDF | "Export as PDF" opens the doctor view and the browser print dialog, styled with print CSS. |
 | Sharing | Uses the native share sheet, or copies plain text to the clipboard. Secure share links need accounts and a backend. |

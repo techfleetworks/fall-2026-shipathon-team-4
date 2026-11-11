@@ -2,16 +2,19 @@
 export { GUARDRAIL_RULES, CRISIS_SENTINEL, type GuardrailRule, type GuardrailRuleId } from './rules.js';
 export { buildSystemPrompt, type SystemPromptOptions } from './systemPrompt.js';
 export { checkOutput, type CheckContext, type CheckResult, type Violation } from './checks.js';
-export { guardResponse, type GuardResult } from './enforce.js';
+export { guardResponse, storyDraftHasCrisis, type GuardResult } from './enforce.js';
 export {
   DISCLAIMERS,
   BLOCKED_FALLBACK,
-  CRISIS_MESSAGE,
-  CRISIS_RESOURCES,
-  CRISIS_SHORT,
+  CRISIS_DETECTED_RESOURCES,
+  CRISIS_HANDOFF,
+  HELP_HEADING,
+  HELP_RESOURCES,
   crisisMessageText,
   disclaimerText,
   withAppName,
-  type CrisisResource,
   type DisclaimerKey,
+  type HelpAction,
+  type HelpResource,
+  type HelpResourceId,
 } from './copy.js';

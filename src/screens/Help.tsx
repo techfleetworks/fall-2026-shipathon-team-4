@@ -1,55 +1,65 @@
 import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
-import { CRISIS_MESSAGE, CRISIS_RESOURCES, CRISIS_SHORT } from '../lib/guardrails/copy';
+import { CRISIS_DETECTED_RESOURCES, CRISIS_HANDOFF, HELP_HEADING, HELP_RESOURCES, type HelpResource } from '../lib/guardrails/copy';
 import { useApp } from '../lib/store';
 
 /**
- * Crisis support (PRD F6/J5, ticket B3). Shown from the help link on every page, and automatically
- * when crisis language is detected (detected = true).
+ * Help (PRD F6/J5). Reachable from every page, and shown automatically when crisis language is
+ * typed anywhere (detected = true); that text is never saved or folded into a brief.
  *
- * Copy: Copy Drafts §3 crisis-response message, kept in src/lib/guardrails/copy.ts. It routes only to
- * peer support that won't contact police or emergency services without consent. Draft — needs mentor
- * sign-off; open decision on an opt-in, user-initiated emergency option (see ADR-004).
+ * Team decision (ADR-001 update): heading "Places to start if you need help.", order warmline → 988 → 911,
+ * no breathing card, 988 neutral ("for when you're in crisis", "Free, 24/7"), 911 the red emergency card.
+ * When detected, a gentle handoff with 988 surfaced first. No active-rescue or police framing.
+ * Content lives in src/lib/guardrails/copy.ts.
  */
 export function Help({ detected = false }: { detected?: boolean }) {
   const signedIn = useApp((s) => !!s.profile?.onboarded);
+  const resources = detected ? CRISIS_DETECTED_RESOURCES : HELP_RESOURCES;
+
   return (
-    <Shell header={{ kind: 'sub', title: 'Support', back: 'history', right: <span /> }}>
+    <Shell header={{ kind: 'sub', title: 'Help', back: 'history', right: <span /> }}>
       {detected ? (
         <>
-          <h1>{CRISIS_MESSAGE.title}</h1>
-          <p className="lead">{CRISIS_MESSAGE.intro}</p>
-          <p className="small muted">We paused here. What you just wrote was not saved.</p>
+          <h1>{CRISIS_HANDOFF.title}</h1>
+          <p className="lead">{CRISIS_HANDOFF.body}</p>
+          <p className="small muted">{CRISIS_HANDOFF.notSaved}</p>
         </>
       ) : (
-        <>
-          <h1>{CRISIS_SHORT.lead}</h1>
-          <p className="lead">These people won’t call the police or send anyone unless you ask them to.</p>
-        </>
+        <h1>{HELP_HEADING}</h1>
       )}
 
       <ul className="stack" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {CRISIS_RESOURCES.map((r) => (
-          <li key={r.name} className="card card--soft">
-            <h2 style={{ fontSize: '1.05rem', margin: 0 }}>{r.name}</h2>
-            <p>{r.note}</p>
-            {r.tel && (
-              <a className="btn btn--primary" href={`tel:${r.tel}`} aria-label={`Call ${r.name} at ${r.phone}`}>
-                Call {r.phone}
-              </a>
-            )}
-            {r.url && (
-              <a className="btn" href={r.url} target="_blank" rel="noreferrer">
-                {r.urlLabel}
-              </a>
-            )}
+        {resources.map((r) => (
+          <li key={r.id}>
+            <ResourceCard resource={r} />
           </li>
         ))}
       </ul>
 
-      {detected && <p>{CRISIS_MESSAGE.closing}</p>}
-
       <Link to={signedIn ? '/home' : '/'} className="btn btn--ghost btn--block">Back to {signedIn ? 'Home' : 'start'}</Link>
     </Shell>
+  );
+}
+
+function ResourceCard({ resource: r }: { resource: HelpResource }) {
+  const emergency = r.tone === 'emergency';
+  return (
+    <section className={`card ${emergency ? 'card--danger' : 'card--soft'}`} aria-labelledby={`help-${r.id}`}>
+      {r.label && <span className="card__label">{r.label}</span>}
+      <h2 id={`help-${r.id}`} style={{ fontSize: '1.1rem', margin: 0 }}>{r.title}</h2>
+      <p>{r.body}</p>
+      <div className="row row--wrap">
+        {r.actions.map((a, i) => (
+          <a
+            key={a.href}
+            href={a.href}
+            className={`btn btn--sm${emergency ? ' btn--danger' : i === 0 ? ' btn--primary' : ''}`}
+            {...(a.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+          >
+            {a.label}
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }

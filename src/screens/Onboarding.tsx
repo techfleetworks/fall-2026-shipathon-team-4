@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { Checkbox, ChipMulti, Progress } from '../components/ui';
 import { todayISO } from '../lib/dates';
-import { CRISIS_SHORT } from '../lib/guardrails/copy';
 import { useApp } from '../lib/store';
 import type { ForWhom, Reason } from '../lib/types';
 
@@ -78,7 +77,7 @@ export function Onboarding() {
           <div className="card card--soft">
             <p className="small">
               Get Heard helps you describe what you’re experiencing. It does not diagnose and does not give medical advice.
-              {' '}{CRISIS_SHORT.lead} {CRISIS_SHORT.line}
+              If you are in crisis, call or text 988.
             </p>
           </div>
           <Checkbox checked={adult} onChange={setAdult}>I’m 18 or older and in the US</Checkbox>

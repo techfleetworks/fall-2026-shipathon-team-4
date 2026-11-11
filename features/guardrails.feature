@@ -51,3 +51,15 @@ Feature: The engine never diagnoses, advises or doses, and crisis comes first
     Given the patient wrote "Medication: ziprasidone 40 mg, started 5 weeks ago"
     When the engine answers "Ziprasidone 40 mg, started 5 weeks ago. Drowsiness began after the dose change."
     Then the response is shown unchanged
+
+  @security @safety @audience:patient @usecase:guard-crisis-story-skip @category:security @quality:safety @severity:critical
+  Scenario: Crisis language typed into any story step never reaches a summary or brief
+    Given the patient typed "I want to hurt myself" into the "triggers" step of their story
+    When the story is about to become a summary
+    Then the story goes to the crisis path instead
+
+  @security @safety @audience:patient @usecase:guard-crisis-handoff @category:security @quality:safety @severity:critical
+  Scenario: The crisis handoff surfaces 988 first, gently
+    When crisis support is shown after crisis language
+    Then 988 is the first resource
+    And nothing in it mentions police or rescue
