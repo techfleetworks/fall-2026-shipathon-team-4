@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
+import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
 import { selectHasAccount, useApp } from '../../lib/store';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,6 +39,24 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
     if (mode === 'signup' && !lastName.trim()) return setError('Enter your last name.');
     if (!EMAIL_RE.test(em)) return setError('Enter a valid email address.');
     if (password.length < 8) return setError('Use at least 8 characters for your password.');
+
+    // Sign-in server (Supabase, ADR-001) when it's set up; otherwise the on-device version below.
+    if (isServerAuthEnabled()) {
+      setBusy(true);
+      const result = mode === 'signup'
+        ? await signUp({ email: em, password, firstName: firstName.trim(), lastName: lastName.trim() })
+        : await logIn({ email: em, password });
+      setBusy(false);
+      if (result.status === 'error' || result.status === 'confirm-email') return setError(result.message);
+      if (result.status !== 'ok') return setError('Sign-in isn’t available right now. Please try again.');
+      // This device already has this person's app data: just sign in.
+      if (mode === 'login' && profile?.onboarded && profile.email === em) {
+        signIn();
+        return navigate('/home', { replace: true });
+      }
+      // New account, or a device without their data yet: finish setup here (consent is asked on every device).
+      return navigate('/welcome', { state: { email: em, firstName: result.user.firstName || firstName.trim(), lastName: result.user.lastName || lastName.trim() } });
+    }
 
     if (mode === 'signup') {
       if (hasAccount) {
