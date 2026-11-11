@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 
 /* Minimal typing for the Web Speech API (not in TS DOM lib). */
-interface SpeechRecognitionLike {
+export interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
@@ -13,7 +13,7 @@ interface SpeechRecognitionLike {
 }
 type SRCtor = new () => SpeechRecognitionLike;
 
-function getRecognition(): SRCtor | undefined {
+export function getRecognition(): SRCtor | undefined {
   const w = window as unknown as { SpeechRecognition?: SRCtor; webkitSpeechRecognition?: SRCtor };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 }
@@ -26,11 +26,11 @@ interface Props {
 }
 
 /**
- * "Hold to talk" or type. Uses the browser's speech recognition where available
- * (Chrome, Safari). Audio is handled by the browser vendor and never stored by us.
- * Where it isn't supported, only the text box shows.
+ * Browser speech recognition (Chrome, Safari) that appends to a text value.
+ * Audio is handled by the browser vendor and never stored by us.
+ * `supported` is false where the API doesn't exist — show typing only.
  */
-export function TalkOrType({ value, onChange, placeholder, label = 'Or type it' }: Props) {
+export function useSpeechInput(value: string, onChange: (v: string) => void) {
   const Ctor = getRecognition();
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
@@ -62,26 +62,35 @@ export function TalkOrType({ value, onChange, placeholder, label = 'Or type it' 
   };
   const stop = () => recRef.current?.stop();
 
+  /** Props for a hold-to-talk button (pointer hold, or Space/Enter to toggle). */
+  const buttonProps = {
+    type: 'button' as const,
+    className: `talk${listening ? ' listening' : ''}`,
+    onPointerDown: (e: PointerEvent) => { e.preventDefault(); start(); },
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onKeyDown: (e: KeyboardEvent) => {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); if (listening) stop(); else start(); }
+    },
+    'aria-pressed': listening,
+  };
+
+  return { supported: !!Ctor, listening, buttonProps };
+}
+
+/** "Hold to talk" or type. Where speech isn't supported, only the text box shows. */
+export function TalkOrType({ value, onChange, placeholder, label = 'Or type it' }: Props) {
+  const { supported, listening, buttonProps } = useSpeechInput(value, onChange);
   return (
     <div className="stack">
-      {Ctor && (
+      {supported && (
         <div className="stack-sm" style={{ alignItems: 'center' }}>
-          <button
-            type="button"
-            className={`talk${listening ? ' listening' : ''}`}
-            onPointerDown={(e) => { e.preventDefault(); start(); }}
-            onPointerUp={stop}
-            onPointerLeave={stop}
-            onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); listening ? stop() : start(); } }}
-            aria-pressed={listening}
-          >
-            {listening ? 'Listening' : 'Talk'}
-          </button>
+          <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>
           <span className="small muted">{listening ? 'Release to stop' : 'Hold to talk'}</span>
         </div>
       )}
       <div className="field">
-        <label className="muted">{Ctor ? label : 'Type it'}</label>
+        <label className="muted">{supported ? label : 'Type it'}</label>
         <textarea className="textarea" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
       </div>
     </div>

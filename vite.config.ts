@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'Get Heard',
-        short_name: 'Get Heard',
+        name: 'Appointment Ready',
+        short_name: 'Appt Ready',
         description: 'Tell your story in your own words. Walk into your visit with a one-page brief.',
         theme_color: '#1F6B63',
         background_color: '#F5F2EB',

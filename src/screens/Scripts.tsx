@@ -3,10 +3,10 @@ import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { Chip } from '../components/ui';
 import { SCRIPTS, SCRIPT_CATEGORIES, type Script } from '../data/scripts';
-import { useApp } from '../lib/store';
+import { selectSignedIn, useApp } from '../lib/store';
 
 export function Scripts() {
-  const signedIn = useApp((s) => !!s.profile?.onboarded);
+  const signedIn = useApp(selectSignedIn);
   const saved = useApp((s) => s.savedScripts);
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
@@ -64,7 +64,7 @@ function ScriptText({ text }: { text: string }) {
 }
 
 export function ScriptCard({ script }: { script: Script }) {
-  const signedIn = useApp((s) => !!s.profile?.onboarded);
+  const signedIn = useApp(selectSignedIn);
   const isSaved = useApp((s) => s.savedScripts.includes(script.id));
   const toggle = useApp((s) => s.toggleScript);
   return (

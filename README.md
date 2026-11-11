@@ -1,4 +1,4 @@
-# Get Heard (fall-2026-shipathon-team-4)
+# Appointment Ready (fall-2026-shipathon-team-4)
 
 A progressive web app that helps people with depression and anxiety tell their story in their own words, see it in doctor terms, and walk into a visit with a one-page brief.
 

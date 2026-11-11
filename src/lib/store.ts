@@ -17,6 +17,9 @@ import type {
   SharedTip,
   StoryDraft,
   Visit,
+  NotificationPrefs,
+  MyPlaybook,
+  ShareLink,
 } from './types';
 import { buildDemoState } from '../data/demo';
 
@@ -38,17 +41,26 @@ export interface AppData {
   sharedTips: SharedTip[];
   morning?: MorningPrep;
   textScale: number;
+  /** False after "Log out". Data stays on the device until deleted. */
+  signedIn?: boolean;
+  notifications: NotificationPrefs;
+  myPlaybooks: MyPlaybook[];
+  shareLinks: ShareLink[];
 }
 
 interface AppActions {
-  completeOnboarding: (p: Omit<Profile, 'onboarded'>, nextVisit?: string) => void;
+  completeOnboarding: (p: Omit<Profile, 'onboarded'>, nextVisit?: { date: string; clinician?: string; specialty?: string }) => void;
   updateProfile: (p: Partial<Profile>) => void;
-  setNextVisit: (date: string | undefined, clinician?: string) => void;
+  setNextVisit: (date: string | undefined, clinician?: string, specialty?: string) => void;
   saveSummary: (s: Omit<CaseSummary, 'id' | 'createdAt'>) => void;
   addEvidence: (e: Omit<Evidence, 'id'>) => void;
   deleteEvidence: (id: string) => void;
   addMedication: (m: Omit<Medication, 'id'>) => void;
   deleteMedication: (id: string) => void;
+  addVisit: (v: { date: string; time?: string; clinician?: string; specialty?: string; reason?: string }) => string;
+  addFollowUp: (f: Omit<FollowUp, 'id'>) => void;
+  updateFollowUp: (id: string, patch: Partial<FollowUp>) => void;
+  deleteFollowUp: (id: string) => void;
   updateVisit: (id: string, patch: Partial<Visit>) => void;
   deleteVisit: (id: string) => void;
   submitCheckIn: (visitId: string, c: CheckIn) => void;
@@ -57,6 +69,13 @@ interface AppActions {
   addTip: (t: Omit<SharedTip, 'id' | 'createdAt'>) => void;
   setMorning: (m: Partial<MorningPrep>) => void;
   setTextScale: (n: number) => void;
+  signOut: () => void;
+  signIn: () => void;
+  setNotifications: (p: Partial<NotificationPrefs>) => void;
+  savePlaybook: (p: Omit<MyPlaybook, 'id' | 'createdAt'>) => string;
+  deletePlaybook: (id: string) => void;
+  createShareLink: (snapshot: ShareLink['snapshot'], days: number) => ShareLink;
+  revokeShareLink: (id: string) => void;
   loadDemo: () => void;
   deleteEverything: () => void;
 }
@@ -72,6 +91,10 @@ const EMPTY: AppData = {
   savedScripts: [],
   sharedTips: [],
   textScale: 1,
+  signedIn: true,
+  notifications: { prepReminders: true, morningOf: true, followUps: true },
+  myPlaybooks: [],
+  shareLinks: [],
 };
 
 export const useApp = create<AppData & AppActions>()(
@@ -81,20 +104,20 @@ export const useApp = create<AppData & AppActions>()(
 
       completeOnboarding: (p, nextVisit) => {
         set({ profile: { ...p, onboarded: true } });
-        if (nextVisit) get().setNextVisit(nextVisit);
+        if (nextVisit) get().setNextVisit(nextVisit.date, nextVisit.clinician, nextVisit.specialty);
       },
 
       updateProfile: (p) => set((s) => ({ profile: s.profile ? { ...s.profile, ...p } : s.profile })),
 
-      setNextVisit: (date, clinician) =>
+      setNextVisit: (date, clinician, specialty) =>
         set((s) => {
           const upcoming = selectUpcomingVisit(s);
           if (!date) return { visits: s.visits.filter((v) => v !== upcoming) };
           if (upcoming) {
-            return { visits: s.visits.map((v) => (v === upcoming ? { ...v, date, clinician: clinician ?? v.clinician } : v)) };
+            return { visits: s.visits.map((v) => (v === upcoming ? { ...v, date, clinician: clinician ?? v.clinician, specialty: specialty ?? v.specialty } : v)) };
           }
           return {
-            visits: [...s.visits, { id: uid(), date, clinician, priorities: defaultPriorities(s), askingFor: [] }],
+            visits: [...s.visits, { id: uid(), date, clinician, specialty, priorities: defaultPriorities(s), askingFor: [] }],
           };
         }),
 
@@ -131,6 +154,16 @@ export const useApp = create<AppData & AppActions>()(
         })),
       deleteMedication: (id) => set((s) => ({ medications: s.medications.filter((m) => m.id !== id) })),
 
+      addVisit: (v) => {
+        const id = uid();
+        // Only the next upcoming visit inherits talking points from the latest story.
+        set((s) => ({ visits: [...s.visits, { id, ...v, priorities: v.date >= todayISO() ? defaultPriorities(s) : [], askingFor: [] }] }));
+        return id;
+      },
+      addFollowUp: (f) => set((s) => ({ followUps: [...s.followUps, { ...f, id: uid() }] })),
+      updateFollowUp: (id, patch) => set((s) => ({ followUps: s.followUps.map((f) => (f.id === id ? { ...f, ...patch } : f)) })),
+      deleteFollowUp: (id) => set((s) => ({ followUps: s.followUps.filter((f) => f.id !== id) })),
+
       updateVisit: (id, patch) => set((s) => ({ visits: s.visits.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
       deleteVisit: (id) =>
         set((s) => ({ visits: s.visits.filter((v) => v.id !== id), followUps: s.followUps.filter((f) => f.visitId !== id) })),
@@ -138,18 +171,14 @@ export const useApp = create<AppData & AppActions>()(
       submitCheckIn: (visitId, c) =>
         set((s) => {
           const visit = s.visits.find((v) => v.id === visitId);
-          const steps = c.nextSteps.filter((n) => n !== 'None given');
-          const followUps: FollowUp[] = c.dueDate
-            ? steps.map((step) => ({ id: uid(), visitId, step, dueDate: c.dueDate! }))
-            : [];
-          const detail = [
-            `Felt heard ${c.feltHeard}/5`,
-            steps.length ? steps.join(', ').toLowerCase() + ' promised' : 'no clear next step',
-          ].join(' · ');
+          const agreed = c.nextStepAgreed === 'Yes' ? 'next step agreed' : c.nextStepAgreed === 'Not clear' ? 'next step not clear' : 'no next step';
+          const detail = `Felt heard ${c.feltHeard}/5 · ${agreed}`;
+          const already = s.evidence.some((e) => e.type === 'visit' && e.date === visit?.date && e.detail.startsWith('Felt heard'));
           return {
             visits: s.visits.map((v) => (v.id === visitId ? { ...v, checkIn: c } : v)),
-            followUps: [...s.followUps, ...followUps],
-            evidence: [...s.evidence, { id: uid(), date: visit?.date ?? todayISO(), type: 'visit', title: 'Visit', detail }],
+            evidence: already
+              ? s.evidence.map((e) => (e.type === 'visit' && e.date === visit?.date && e.detail.startsWith('Felt heard') ? { ...e, detail } : e))
+              : [...s.evidence, { id: uid(), date: visit?.date ?? todayISO(), type: 'visit', title: 'Visit', detail }],
           };
         }),
 
@@ -180,6 +209,38 @@ export const useApp = create<AppData & AppActions>()(
 
       setTextScale: (textScale) => set({ textScale }),
 
+      signOut: () => {
+        set({ signedIn: false });
+        useDraft.getState().reset();
+      },
+      signIn: () => set({ signedIn: true }),
+
+      setNotifications: (p) => set((s) => ({ notifications: { ...EMPTY.notifications, ...s.notifications, ...p } })),
+
+      savePlaybook: (p) => {
+        const id = uid();
+        set((s) => ({ myPlaybooks: [...(s.myPlaybooks ?? []), { ...p, id, createdAt: new Date().toISOString() }] }));
+        return id;
+      },
+      deletePlaybook: (id) => set((s) => ({ myPlaybooks: (s.myPlaybooks ?? []).filter((p) => p.id !== id) })),
+
+      createShareLink: (snapshot, days) => {
+        const now = new Date();
+        const bytes = crypto.getRandomValues(new Uint8Array(12));
+        const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+        const link: ShareLink = {
+          id: uid(),
+          token,
+          createdAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString(),
+          snapshot,
+        };
+        set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
+        return link;
+      },
+      revokeShareLink: (id) =>
+        set((s) => ({ shareLinks: (s.shareLinks ?? []).map((l) => (l.id === id ? { ...l, revokedAt: new Date().toISOString() } : l)) })),
+
       loadDemo: () => set((s) => ({ ...EMPTY, textScale: s.textScale, ...buildDemoState() })),
 
       deleteEverything: () => {
@@ -193,13 +254,27 @@ export const useApp = create<AppData & AppActions>()(
         useDraft.getState().reset();
       },
     }),
-    { name: 'get-heard', version: 1, storage: createJSONStorage(() => localStorage) },
+    {
+      name: 'get-heard',
+      version: 2,
+      storage: createJSONStorage(() => localStorage),
+      // v2: caregiver access removed from the product — drop any stored invites.
+      migrate: (persisted) => {
+        const { caregivers: _drop, ...rest } = (persisted ?? {}) as Record<string, unknown>;
+        return rest as unknown as AppData & AppActions;
+      },
+    },
   ),
 );
 
 const STORAGE_KEY = 'get-heard';
 
 // ---------- selectors ----------
+
+/** Has an account on this device AND hasn't logged out. */
+export const selectSignedIn = (s: Pick<AppData, 'profile' | 'signedIn'>) => !!s.profile?.onboarded && s.signedIn !== false;
+/** An account exists on this device (signed in or not). */
+export const selectHasAccount = (s: Pick<AppData, 'profile'>) => !!s.profile?.onboarded;
 
 export function selectUpcomingVisit(s: Pick<AppData, 'visits'>): Visit | undefined {
   const today = todayISO();
@@ -220,9 +295,14 @@ export function selectLatestSummary(s: Pick<AppData, 'summaries'>): CaseSummary 
   return s.summaries[s.summaries.length - 1];
 }
 
+export function isLinkActive(l: ShareLink, now = Date.now()): boolean {
+  return !l.revokedAt && new Date(l.expiresAt).getTime() > now;
+}
+
 export function selectDueFollowUps(s: Pick<AppData, 'followUps'>): FollowUp[] {
   const today = todayISO();
-  return s.followUps.filter((f) => !f.outcome && f.dueDate <= today);
+  // Only steps with a reminder on (older data has no flag, so it counts as on).
+  return s.followUps.filter((f) => !f.outcome && f.reminder !== false && f.dueDate <= today);
 }
 
 function defaultPriorities(s: Pick<AppData, 'summaries'>): string[] {
