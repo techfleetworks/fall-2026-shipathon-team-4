@@ -124,6 +124,36 @@ Limits: 200,000 characters; request body 1 MB (`413` if bigger).
 
 ---
 
+## 2b. Transcript → recap: `POST /api/visit-summary` (new)
+
+Turns a transcript into **"What the doctor said"** lines for the Recap (`recap.doctorSaid`). Rule-based for now:
+the clinician's own lines, in their words (Claude can rewrite them in plain words later, behind the same endpoint).
+
+```ts
+import { requestVisitSummary } from '../../lib/api';
+const out = await requestVisitSummary(text, 'paste', { patientName: profile?.name });
+// out.status: 'ok' → out.doctorSaid: string[], out.clinicians: string[] | 'crisis' | 'rejected' | 'unavailable'
+```
+
+Body: `{ transcript, source?, patientName? }` (`patientName` ≤ 80 characters; it's how the server tells the patient's
+lines from the clinician's. Without it, speakers named "Dr. …", "Nurse …" etc. count as clinicians.)
+`200 { status: "ok", doctorSaid, clinicians, dialogueTurns, disclaimer }` · `200 { status: "crisis", help }` · `400` · `415`.
+Store the lines with `source: 'transcript'` (the Recap pill then reads "★ From your transcript").
+
+## Drop-in pieces (ready to place anywhere)
+
+See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
+pieces are placed.
+
+| Piece | One line to add it | What it does |
+|---|---|---|
+| `TranscriptImport` (`src/components/transcript/`) | `<TranscriptImport patientName={profile?.name} demo={demoMode} onUse={(lines) => …} />` | Paste / .txt upload / Theo sample → crisis check on the device → `/api/visit-summary` → the patient reviews the doctor's lines → `onUse(lines)`. The transcript is kept in memory only. |
+| `DisclaimerNote` (`src/components/guardrails/`) | `<DisclaimerNote kind="notMedicalAdvice" />` | One line of small print (`note` class). Default `kind` is `short`. |
+| `DisclaimerCard` | `<DisclaimerCard kind="notForEmergencies" />` | The same line as a calm card (`pcard pcard--muted`). |
+
+`aiCanBeWrong` renders nothing until `AI_IN_USE` (in `src/lib/guardrails/copy.ts`) is set to `true`, in the
+same change that wires Claude in.
+
 ## 3. `GET /api/health`
 
 `{ "status": "ok", "service": "appointment-ready-api", "time": "..." }`. Use it to check the server is up.

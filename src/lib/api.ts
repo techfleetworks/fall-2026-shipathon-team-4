@@ -82,6 +82,52 @@ export async function requestPrepSummary(
 
 const unavailablePrep = (): PrepSummaryOutcome => ({ status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE });
 
+// ---------------------------------------------------------------- POST /api/visit-summary
+
+export type VisitSummaryOutcome =
+  /** `doctorSaid` fills the Recap's "What the doctor said". Empty if the clinician's lines couldn't be found. */
+  | { status: 'ok'; doctorSaid: string[]; clinicians: string[]; dialogueTurns: number }
+  | { status: 'crisis' }
+  | { status: 'rejected'; error: { code: string; message: string } }
+  | { status: 'unavailable'; message: string };
+
+/** Turn a transcript into recap lines on the server. Never throws. */
+export async function requestVisitSummary(
+  transcript: string,
+  source: TranscriptSource,
+  { patientName, signal, fetchImpl = fetch }: { patientName?: string; signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): Promise<VisitSummaryOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl('/api/visit-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript, source, ...(patientName ? { patientName } : {}) }),
+      signal,
+    });
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  if (res.status === 413) return { status: 'rejected', error: intakeError('TOO_LONG') };
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+  if (res.status === 200 && b.status === 'ok' && strings(b.doctorSaid) && strings(b.clinicians) && typeof b.dialogueTurns === 'number') {
+    return { status: 'ok', doctorSaid: b.doctorSaid, clinicians: b.clinicians, dialogueTurns: b.dialogueTurns };
+  }
+  if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
+  if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {
+    const e = b.error as Record<string, unknown>;
+    if (typeof e.code === 'string' && typeof e.message === 'string') return { status: 'rejected', error: { code: e.code, message: e.message } };
+  }
+  return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+}
+
 // ---------------------------------------------------------------- POST /api/transcripts
 
 /** Send a transcript to POST /api/transcripts. Never throws. */

@@ -28,7 +28,17 @@ When('I POST the JSON {string} to {string}', async function (this: World, json: 
 });
 
 When('I POST the transcript {string} to {string}', async function (this: World, transcript: string, path: string) {
-  this.res = await request(app).post(path).send({ transcript });
+  // Gherkin passes "\n" as two characters; turn it into a real line break.
+  this.res = await request(app).post(path).send({ transcript: transcript.replace(/\\n/g, '\n') });
+});
+
+When("I POST Theo's sample transcript with patient {string} to {string}", async function (this: World, patientName: string, path: string) {
+  this.res = await request(app).post(path).send({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', patientName });
+});
+
+Then('the recap has {int} lines from {string}', function (this: World, n: number, clinician: string) {
+  assert.equal(res(this).body.doctorSaid?.length, n);
+  assert.deepEqual(res(this).body.clinicians, [clinician]);
 });
 
 When('I POST the raw JSON {string} to {string}', async function (this: World, raw: string, path: string) {

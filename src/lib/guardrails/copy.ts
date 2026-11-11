@@ -40,6 +40,12 @@ export const DISCLAIMERS = {
 
 export type DisclaimerKey = keyof typeof DISCLAIMERS;
 
+/**
+ * Is AI (Claude) actually generating content in the app yet? The "This is AI — double-check it." line may only
+ * show when this is true (we only claim what we ship). Flip it in the same change that wires Claude in.
+ */
+export const AI_IN_USE = false;
+
 /** Replace every {app} token with the app's display name. */
 export function withAppName(text: string, appName: string): string {
   return text.split(APP_TOKEN).join(appName);

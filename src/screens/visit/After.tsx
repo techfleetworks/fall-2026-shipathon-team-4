@@ -46,7 +46,7 @@ export function RecapStep() {
       <section className="panel panel--accent">
         <div className="row row--between row--wrap">
           <h1 className="panel-title">What happened at your visit</h1>
-          {source && <span className="pill pill--amber-soft">{source === 'recording' ? '★ From your recording' : 'From your notes'}</span>}
+          {source && <span className="pill pill--amber-soft">{source === 'recording' ? '★ From your recording' : source === 'transcript' ? '★ From your transcript' : 'From your notes'}</span>}
         </div>
         {editing ? (
           <div className="field">

@@ -58,3 +58,17 @@ Feature: Transcript intake API
     Then the header "x-content-type-options" is "nosniff"
     And the header "cache-control" is "no-store"
     And there is no "x-powered-by" header
+
+  @audience:api-consumer @usecase:api-visit-summary @category:happy @quality:functional @severity:critical
+  Scenario: Theo's transcript becomes "What the doctor said" for the recap
+    When I POST Theo's sample transcript with patient "Theo" to "/api/visit-summary"
+    Then the response status is 200
+    And the response field "status" is "ok"
+    And the recap has 3 lines from "Dr. Lane"
+
+  @security @safety @audience:anonymous-attacker @usecase:api-visit-summary-crisis @category:security @quality:safety @severity:critical
+  Scenario: A transcript with crisis language builds no recap
+    When I POST the transcript "Dr. Lane: How are things?\nTheo: I don't see the point anymore" to "/api/visit-summary"
+    Then the response status is 200
+    And the response field "status" is "crisis"
+    And the response has no payload

@@ -16,7 +16,9 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { APP_NAME } from '../src/lib/brand.js';
 import { translateStoryGuarded } from '../src/lib/engine.js';
 import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../src/lib/guardrails/copy.js';
+import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
+import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { parseStoryDraft } from './storyDraft.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
@@ -149,7 +151,36 @@ export function createApp() {
     }
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  /**
+   * POST /api/visit-summary: transcript → "What the doctor said" for the Recap (recap.doctorSaid).
+   * Body: { "transcript": string, "source"?: "paste" | "upload" | "sample", "patientName"?: string }
+   * 200 { status: "ok", doctorSaid: string[], clinicians: string[], dialogueTurns, disclaimer }
+   * 200 { status: "crisis", help } (nothing built) · 400 rejected (empty, too long, bad input) · 415 not JSON
+   * Rule-based for now (the clinician's own lines). Nothing is stored and the transcript is never logged.
+   */
+  api.post('/visit-summary', (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_INPUT');
+    const source = body.source ?? 'paste';
+    if (typeof source !== 'string' || !SOURCES.includes(source as TranscriptSource)) return sendError(res, 400, 'INVALID_INPUT');
+    const patientName = body.patientName;
+    if (patientName !== undefined && (typeof patientName !== 'string' || patientName.length > 80)) return sendError(res, 400, 'INVALID_INPUT');
+
+    const outcome = processTranscript(body.transcript, source as TranscriptSource);
+    if (outcome.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+    if (outcome.status === 'rejected') return res.status(400).json({ status: 'error', error: outcome.error });
+    const { payload } = outcome;
+    return res.status(200).json({
+      status: 'ok',
+      doctorSaid: doctorSaidFrom(payload, patientName),
+      clinicians: clinicianSpeakers(payload, patientName),
+      dialogueTurns: payload.stats.dialogueTurns,
+      disclaimer: SYNTHETIC_LABEL,
+    });
+  });
+
+  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
