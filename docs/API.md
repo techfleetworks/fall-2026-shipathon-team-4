@@ -163,6 +163,24 @@ lines from the clinician's. Without it, speakers named "Dr. …", "Nurse …" et
 `200 { status: "ok", doctorSaid, clinicians, dialogueTurns, disclaimer }` · `200 { status: "crisis", help }` · `400` · `415`.
 Store the lines with `source: 'transcript'` (the Recap pill then reads "★ From your transcript").
 
+## 2c. Clinical → plain: `POST /api/explain` (new, ADR-007)
+
+Explains clinical words and note shorthand in plain language, from a reviewed glossary (no AI, free).
+Works on a clinical note, what the doctor said, or the app's own doctor-terms lines.
+
+```ts
+import { requestExplanation } from '../../lib/api';
+
+const out = await requestExplanation('?orthostatic hypotension, RV in 4/52');
+if (out.status === 'ok') out.explanations; // [{ found: '?', plain: 'Query (or a "?" …)…' }, { found: 'orthostatic hypotension', plain: 'Blood pressure that drops…' }, …]
+```
+
+Each explanation is `{ id, term, kind: 'term' | 'shorthand', found, plain }`, in reading order. An empty list
+means there was nothing to explain. Other statuses: `crisis` (go to crisis support), `blocked` (show `message`),
+`rejected` (`EMPTY_TEXT`, `TEXT_TOO_LONG` over 20,000 characters, `INVALID_TEXT`), `unavailable`.
+No server needed for tooltips: `explainClinical(text)` from `src/lib/explain/explain.ts` gives the same answer on the device.
+Placement is yours, e.g. a "What this means" link under each doctor-terms line.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

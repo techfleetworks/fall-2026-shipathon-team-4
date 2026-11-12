@@ -7,6 +7,7 @@ import { SYNTHETIC_LABEL } from './transcript/constants';
 import { intakeError } from './transcript/intake';
 import type { TranscriptPayload, TranscriptSource } from './transcript/types';
 import type { StoryDraft, SummaryField } from './types';
+import type { Explanation } from './explain/explain';
 
 export type ServerTranscriptOutcome =
   | { status: 'accepted'; payload: TranscriptPayload }
@@ -101,6 +102,53 @@ export async function requestPrepSummary(
 }
 
 const unavailablePrep = (): PrepSummaryOutcome => ({ status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE });
+
+// ---------------------------------------------------------------- POST /api/explain
+
+export type ExplainOutcome =
+  /** One entry per term found, in reading order. Empty if nothing needed explaining. */
+  | { status: 'ok'; explanations: Explanation[] }
+  | { status: 'crisis' }
+  | { status: 'blocked'; message: string }
+  | { status: 'rejected'; error: { code: string; message: string } }
+  | { status: 'unavailable'; message: string };
+
+const isExplanation = (v: unknown): v is Explanation => {
+  if (typeof v !== 'object' || v === null) return false;
+  const e = v as Record<string, unknown>;
+  return ['id', 'term', 'found', 'plain'].every((k) => typeof e[k] === 'string') && (e.kind === 'term' || e.kind === 'shorthand');
+};
+
+/** Clinical → plain on the server (a note, what the doctor said, or doctor-terms lines). Never throws. */
+export async function requestExplanation(
+  text: string,
+  { signal, fetchImpl = fetch }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): Promise<ExplainOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl('/api/explain', { method: 'POST', headers: await jsonHeaders(), body: JSON.stringify({ text }), signal });
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  if (res.status === 200 && b.status === 'ok' && Array.isArray(b.explanations) && b.explanations.every(isExplanation)) {
+    return { status: 'ok', explanations: b.explanations };
+  }
+  if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
+  if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };
+  if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {
+    const e = b.error as Record<string, unknown>;
+    if (typeof e.code === 'string' && typeof e.message === 'string') return { status: 'rejected', error: { code: e.code, message: e.message } };
+  }
+  return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+}
 
 // ---------------------------------------------------------------- POST /api/visit-summary
 
