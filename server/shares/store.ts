@@ -165,7 +165,9 @@ export function supabaseShareStore(url: string, serviceKey: string): ShareStore 
         .select('brief, created_at, expires_at, revoked_at, care_team(name, role)')
         .eq('token_hash', tokenHash)
         .maybeSingle();
-      if (error || !data) return null;
+      // A database problem is an error (500, "try again"), never "this link doesn't exist".
+      if (error) throw new Error('shared_briefs lookup failed');
+      if (!data) return null;
       const r = data as unknown as { brief: BriefSnapshot; created_at: string; expires_at: string; revoked_at: string | null; care_team: { name: string; role: RecipientRole } | null };
       return {
         brief: r.brief,
