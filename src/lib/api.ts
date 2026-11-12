@@ -8,6 +8,7 @@ import { intakeError } from './transcript/intake';
 import type { TranscriptPayload, TranscriptSource } from './transcript/types';
 import type { StoryDraft, SummaryField } from './types';
 import type { Explanation } from './explain/explain';
+import type { LabExplanation, LabRow } from './labs/labs';
 
 export type ServerTranscriptOutcome =
   | { status: 'accepted'; payload: TranscriptPayload }
@@ -140,6 +141,57 @@ export async function requestExplanation(
   const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
   if (res.status === 200 && b.status === 'ok' && Array.isArray(b.explanations) && b.explanations.every(isExplanation)) {
     return { status: 'ok', explanations: b.explanations };
+  }
+  if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
+  if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };
+  if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {
+    const e = b.error as Record<string, unknown>;
+    if (typeof e.code === 'string' && typeof e.message === 'string') return { status: 'rejected', error: { code: e.code, message: e.message } };
+  }
+  return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+}
+
+// ---------------------------------------------------------------- POST /api/explain-results
+
+export type ResultsExplainOutcome =
+  /** `labsNote` is the "ranges differ between labs" line: show it once near the lab results. */
+  | { status: 'ok'; labs: LabExplanation[]; note: Explanation[]; labsNote: string }
+  | { status: 'crisis' }
+  | { status: 'blocked'; message: string }
+  | { status: 'rejected'; error: { code: string; message: string } }
+  | { status: 'unavailable'; message: string };
+
+const POSITIONS = ['above', 'within', 'below', 'change', 'no-range', 'not-compared'];
+const isLabExplanation = (v: unknown): v is LabExplanation => {
+  if (typeof v !== 'object' || v === null) return false;
+  const l = v as Record<string, unknown>;
+  return typeof l.test === 'string' && typeof l.value === 'string' && typeof l.summary === 'string' && POSITIONS.includes(l.position as string);
+};
+
+/** Lab results and/or a clinical note → plain language, on the server. Never throws. */
+export async function requestResultsExplanation(
+  input: { labs?: LabRow[]; note?: string },
+  { signal, fetchImpl = fetch }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): Promise<ResultsExplainOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl('/api/explain-results', { method: 'POST', headers: await jsonHeaders(), body: JSON.stringify(input), signal });
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  if (
+    res.status === 200 && b.status === 'ok' && typeof b.labsNote === 'string' &&
+    Array.isArray(b.labs) && b.labs.every(isLabExplanation) && Array.isArray(b.note) && b.note.every(isExplanation)
+  ) {
+    return { status: 'ok', labs: b.labs, note: b.note, labsNote: b.labsNote };
   }
   if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
   if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };

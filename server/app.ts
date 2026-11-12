@@ -16,6 +16,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { APP_NAME } from '../src/lib/brand.js';
 import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../src/lib/guardrails/copy.js';
 import { MAX_EXPLAIN_CHARS, explainClinical } from '../src/lib/explain/explain.js';
+import { LABS_NOTE, MAX_LAB_FIELD_CHARS, MAX_LAB_ROWS, type LabRow } from '../src/lib/labs/labs.js';
+import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
@@ -52,6 +54,8 @@ export type ApiErrorCode =
   | 'INVALID_TEXT'
   | 'EMPTY_TEXT'
   | 'TEXT_TOO_LONG'
+  | 'INVALID_RESULTS'
+  | 'EMPTY_RESULTS'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
   | 'UNSUPPORTED_MEDIA_TYPE'
@@ -67,6 +71,8 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   EMPTY_STORY: 'Tell us a little about what’s been happening first.',
   INVALID_TEXT: 'Send a JSON object like { "text": "..." }.',
   EMPTY_TEXT: 'Paste the words you’d like explained first.',
+  INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
+  EMPTY_RESULTS: 'Add a lab result or a clinical note to explain first.',
   TEXT_TOO_LONG: `That’s more than we can explain at once (limit ${MAX_EXPLAIN_CHARS.toLocaleString('en-US')} characters).`,
   MALFORMED_JSON: 'The request body is not valid JSON.',
   PAYLOAD_TOO_LARGE: `The request body is too large (limit ${MAX_BODY}).`,
@@ -80,6 +86,22 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
 
 function sendError(res: Response, status: number, code: keyof typeof MESSAGES) {
   res.status(status).json({ status: 'error', error: { code, message: MESSAGES[code] } });
+}
+
+/** Lab rows from a request: known fields only, strings within limits. undefined = invalid. Missing = no rows. */
+function parseLabRows(input: unknown): LabRow[] | undefined {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > MAX_LAB_ROWS) return undefined;
+  const rows: LabRow[] = [];
+  for (const item of input) {
+    if (!isPlainObject(item)) return undefined;
+    const { test, value, typicalRange } = item;
+    const ok = (v: unknown) => typeof v === 'string' && v.trim().length > 0 && v.length <= MAX_LAB_FIELD_CHARS;
+    if (!ok(test) || !ok(value)) return undefined;
+    if (typicalRange !== undefined && (typeof typicalRange !== 'string' || typicalRange.length > MAX_LAB_FIELD_CHARS)) return undefined;
+    rows.push({ test: test as string, value: value as string, ...(typicalRange ? { typicalRange } : {}) });
+  }
+  return rows;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -231,6 +253,34 @@ export function createApp({
   });
 
   /**
+   * POST /api/explain-results: lab results and/or a clinical note in plain language (ADR-008). Free: no AI.
+   * Body: { "labs"?: [{ "test", "value", "typicalRange"? }], "note"?: string }  (at least one)
+   * 200 { status: "ok", labs: [{ test, value, typicalRange?, position, summary, about? }], note: Explanation[], labsNote, disclaimer }
+   * 200 { status: "crisis", help } · 200 { status: "blocked", message, rules } · 400 · 415. Nothing is stored or logged.
+   */
+  api.post('/explain-results', signedIn, (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_RESULTS');
+    const labs = parseLabRows(body.labs);
+    if (!labs) return sendError(res, 400, 'INVALID_RESULTS');
+    const note = body.note ?? '';
+    if (typeof note !== 'string') return sendError(res, 400, 'INVALID_RESULTS');
+    if (note.length > MAX_EXPLAIN_CHARS) return sendError(res, 400, 'TEXT_TOO_LONG');
+    if (!labs.length && !note.trim()) return sendError(res, 400, 'EMPTY_RESULTS');
+
+    const outcome = explainResults({ labs, note });
+    switch (outcome.status) {
+      case 'crisis':
+        return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+      case 'blocked':
+        return res.status(200).json({ status: 'blocked', message: outcome.message, rules: [...new Set(outcome.violations.map((v) => v.rule))] });
+      case 'ok':
+        return res.status(200).json({ status: 'ok', labs: outcome.labs, note: outcome.note, labsNote: LABS_NOTE, disclaimer: DISCLAIMERS.short.body });
+    }
+  });
+
+  /**
    * DELETE /api/account: permanently deletes the signed-in user's account on the sign-in server. Their database
    * rows go with it (ON DELETE CASCADE). The app then wipes the device. Copy promise: "deleted whenever you ask".
    * 204 deleted · 401 not signed in · 503 sign-in or the admin key isn't configured · 500 the delete failed
@@ -243,7 +293,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

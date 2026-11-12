@@ -181,6 +181,27 @@ means there was nothing to explain. Other statuses: `crisis` (go to crisis suppo
 No server needed for tooltips: `explainClinical(text)` from `src/lib/explain/explain.ts` gives the same answer on the device.
 Placement is yours, e.g. a "What this means" link under each doctor-terms line.
 
+## 2d. Labs & notes → plain: `POST /api/explain-results` (new, ADR-008)
+
+Lab results placed against the range printed on the report, plus the clinical-note terms (§2c), in one call. Free, no AI.
+
+```ts
+import { requestResultsExplanation } from '../../lib/api';
+import { THEO_CLINICAL_NOTE, THEO_LABS } from '../../data/sampleResults';   // demo data (synthetic)
+
+const out = await requestResultsExplanation({ labs: [...THEO_LABS], note: THEO_CLINICAL_NOTE });
+if (out.status === 'ok') {
+  out.labs;      // [{ test, value, typicalRange?, position: 'above'|'within'|'below'|'change'|'no-range'|'not-compared', summary, about? }]
+  out.note;      // same shape as /api/explain
+  out.labsNote;  // "Typical ranges differ between labs…": show once near the labs
+}
+```
+
+Example: `{ test: 'Fasting glucose', value: '104 mg/dL', position: 'above', summary: '104 mg/dL is above the typical range shown (70-99).', about: 'Blood sugar measured after not eating, usually overnight.' }`.
+It never says what a result means for the person, by design. Other statuses: `crisis`, `blocked`, `rejected`
+(`EMPTY_RESULTS`, `INVALID_RESULTS`, `TEXT_TOO_LONG`), `unavailable`. For a CSV upload, `parseLabsCsv(text)` from
+`src/lib/labs/labs.ts` turns a labs.csv-style file into rows (other columns are ignored).
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

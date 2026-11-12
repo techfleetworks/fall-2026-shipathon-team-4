@@ -87,6 +87,8 @@ export const GLOSSARY: readonly GlossaryEntry[] = [
   { id: 'side-effect', term: 'Side effect', kind: 'term', match: /\bside[- ]effects?\b/i, plain: 'An unwanted effect of a medication, beyond what it is meant to do.' },
   { id: 'titration', term: 'Titration', kind: 'term', match: /\btitrat(?:e|ed|ing|ion)\b/i, plain: 'Changing a medication’s amount gradually, step by step.' },
   { id: 'monitoring', term: 'Monitoring', kind: 'term', match: /\bmonitor(?:ing|ed)?\b/i, plain: 'Checking something again over time to see whether it changes.' },
+  { id: 'blood-pressure', term: 'Blood pressure', kind: 'term', match: /\bblood pressure\b/i, plain: 'How hard blood pushes on the blood vessels, written as two numbers: the top one while the heart beats, the bottom one between beats.' },
+  { id: 'weight-change', term: 'Weight change', kind: 'term', match: /\bweight change\b/i, plain: 'How much body weight went up or down over a stretch of time.' },
   { id: 'fasting-glucose', term: 'Fasting glucose', kind: 'term', match: /\bfasting (?:blood )?glucose\b/i, plain: 'Blood sugar measured after not eating, usually overnight.' },
   { id: 'cholesterol', term: 'Cholesterol', kind: 'term', match: /\bcholesterol\b/i, plain: 'A fat-like substance in the blood, measured in a blood test.' },
   { id: 'prolactin', term: 'Prolactin', kind: 'term', match: /\bprolactin\b/i, plain: 'A hormone measured in a blood test. Some medications can raise it.' },
