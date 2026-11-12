@@ -104,6 +104,66 @@ describe('watchSharedBrief', () => {
     expect(t2.count()).toBe(0);
   });
 
+  it('re-checks the instant a stop signal arrives, without waiting for the backup check', async () => {
+    const server = fakeServer();
+    let signal = () => {};
+    const seen: string[] = [];
+    watchSharedBrief(TOKEN, (r) => seen.push(r.status), {
+      fetchImpl: server.fetchImpl, intervalMs: 600_000, targets: [], listen: (fn) => { signal = fn; return () => {}; },
+    });
+    await settle();
+    server.set('stopped');
+    signal();
+    await settle();
+    expect(seen).toEqual(['ok', 'stopped']);
+  });
+
+  it('treats the signal as a hint: a forged signal on a working link changes nothing', async () => {
+    const server = fakeServer();
+    let signal = () => {};
+    const seen: string[] = [];
+    watchSharedBrief(TOKEN, (r) => seen.push(r.status), {
+      fetchImpl: server.fetchImpl, intervalMs: 600_000, targets: [], listen: (fn) => { signal = fn; return () => {}; },
+    });
+    await settle();
+    signal();
+    await settle();
+    expect(seen.every((s) => s === 'ok')).toBe(true);
+  });
+
+  it('a signal during a check still gets its own check right after', async () => {
+    let release: () => void = () => {};
+    let state: 'ok' | 'stopped' = 'ok';
+    let calls = 0;
+    const slowFetch: typeof fetch = async () => {
+      calls++;
+      const answer = state; // the server's answer at the moment the request arrives
+      if (calls === 1) await new Promise<void>((r) => { release = r; });
+      const body = answer === 'ok'
+        ? { status: 'ok', brief, sharedWith: { name: 'x', role: 'y' }, expiresAt: new Date(Date.now() + 86_400_000).toISOString() }
+        : { status: 'error', error: { code: 'LINK_STOPPED', message: '' } };
+      return new Response(JSON.stringify(body), { status: answer === 'ok' ? 200 : 410 });
+    };
+    let signal = () => {};
+    const seen: string[] = [];
+    watchSharedBrief(TOKEN, (r) => seen.push(r.status), { fetchImpl: slowFetch, intervalMs: 600_000, targets: [], listen: (fn) => { signal = fn; return () => {}; } });
+    state = 'stopped';
+    signal(); // arrives while the first check is still waiting
+    release();
+    await settle();
+    await settle();
+    expect(seen.at(-1)).toBe('stopped');
+  });
+
+  it('stops listening when the page closes', async () => {
+    const server = fakeServer();
+    const unlisten = vi.fn();
+    const stop = watchSharedBrief(TOKEN, () => {}, { fetchImpl: server.fetchImpl, targets: [], listen: () => unlisten });
+    await settle();
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
   it('does not check while the page is hidden', async () => {
     const server = fakeServer();
     watchSharedBrief(TOKEN, () => {}, { fetchImpl: server.fetchImpl, intervalMs: 1_000, targets: [], isVisible: () => false });

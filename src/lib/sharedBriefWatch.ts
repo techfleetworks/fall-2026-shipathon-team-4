@@ -2,8 +2,9 @@
  * Keeps an open doctor link honest (ADR-009). Without this, a brief stays on the doctor's screen after the
  * patient presses "Stop sharing" or the link expires, until the page is refreshed.
  *
- * Re-checks the server link: every `intervalMs`, whenever the page becomes visible or focused again,
- * and exactly when the link expires. Each answer goes to `onResult`. Framework-free so it can be tested
+ * Re-checks the server link: AT ONCE when the server signals "stopped" (Supabase Realtime, shareSignal.ts),
+ * and as a backup every `intervalMs`, whenever the page becomes visible or focused again, and exactly when
+ * the link expires. Each answer goes to `onResult`. Framework-free so it can be tested
  * with fake timers; Shared.tsx wires it to React.
  *
  * Only a definite answer ends the view: "stopped", "expired" or "missing". A network blip ("unavailable")
@@ -25,6 +26,8 @@ export interface WatchOptions {
   targets?: WatchTarget[];
   /** For "visibilitychange": is the page showing? */
   isVisible?: () => boolean;
+  /** Instant signal from the server that the link was stopped (shareSignal.ts). Returns an "unlisten" function. */
+  listen?: (onSignal: () => void) => () => void;
 }
 
 /** Starts watching. Returns a function that stops every timer and listener. */
@@ -34,14 +37,20 @@ export function watchSharedBrief(token: string, onResult: (r: SharedBriefOutcome
     fetchImpl,
     targets = defaultTargets(),
     isVisible = () => (globalThis as { document?: { visibilityState?: string } }).document?.visibilityState !== 'hidden',
+    listen,
   } = opts;
 
   let stopped = false;
   let inFlight = false;
+  let again = false; // a signal arrived during a check: check once more right after
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 
   const check = async () => {
-    if (stopped || inFlight) return;
+    if (stopped) return;
+    if (inFlight) {
+      again = true;
+      return;
+    }
     inFlight = true;
     try {
       const r = await fetchSharedBrief(token, fetchImpl ? { fetchImpl } : {});
@@ -52,6 +61,10 @@ export function watchSharedBrief(token: string, onResult: (r: SharedBriefOutcome
       else stop(); // a definite end: no more checks needed
     } finally {
       inFlight = false;
+      if (again && !stopped) {
+        again = false;
+        void check();
+      }
     }
   };
 
@@ -72,12 +85,15 @@ export function watchSharedBrief(token: string, onResult: (r: SharedBriefOutcome
     t.addEventListener('focus', onVisible);
     t.addEventListener('visibilitychange', onVisible);
   }
+  // Instant path: the server says "stopped" → ask the server now (even if the tab is in the background).
+  const unlisten = listen ? listen(() => void check()) : () => {};
 
   function stop() {
     if (stopped) return;
     stopped = true;
     clearInterval(interval);
     clearTimeout(expiryTimer);
+    unlisten();
     for (const t of targets) {
       t.removeEventListener('focus', onVisible);
       t.removeEventListener('visibilitychange', onVisible);

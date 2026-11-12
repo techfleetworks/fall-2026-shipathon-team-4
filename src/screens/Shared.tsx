@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PublicLayout } from '../components/PublicLayout';
 import { APP_NAME } from '../lib/brand';
+import { listenForStop } from '../lib/shareSignal';
 import { watchSharedBrief } from '../lib/sharedBriefWatch';
 import type { SharedBriefOutcome } from '../lib/sharesApi';
 import { isLinkActive, useApp } from '../lib/store';
@@ -22,11 +23,11 @@ export function SharedBrief() {
   const link = useApp((s) => (s.shareLinks ?? []).find((l) => l.token === token));
   const [remote, setRemote] = useState<SharedBriefOutcome | 'loading' | null>(null);
 
-  // Server links: re-checked while open, so "Stop sharing" or expiry takes effect without a refresh.
+  // Server links: cleared the moment the patient stops sharing (live signal), with re-checks as a backup.
   useEffect(() => {
     if (link || !token) return;
     setRemote('loading');
-    return watchSharedBrief(token, setRemote);
+    return watchSharedBrief(token, setRemote, { listen: (onSignal) => listenForStop(token, onSignal) });
   }, [link, token]);
 
   // Links made on this device: pick up "Stop sharing" from another tab, and hide the brief the moment it expires.

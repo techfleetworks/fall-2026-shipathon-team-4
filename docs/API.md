@@ -232,7 +232,8 @@ await stopAllShares();                         // stop everyone
 ```
 
 Roles: `Primary care`, `Therapist`, `Psychiatrist`, `Specialist`, `Other`. The **email holds only the link and its end date**,
-never health details. `/shared/:token` already asks the server for links made on other devices.
+never health details. `/shared/:token` already asks the server for links made on other devices, and an open doctor page clears **within about a
+second** when the patient stops sharing (Supabase Realtime signal; 30-second re-check as backup). Nothing to build on your side.
 
 **For your screens (from the team notes):**
 - A "Shared with" list, one row per person with its own **Stop sharing** button. **Stop all** is optional.

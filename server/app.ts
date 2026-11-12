@@ -24,6 +24,7 @@ import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.j
 import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
 import { buildOnePageBrief } from './shares/brief.js';
+import { shareNotifierFromEnv, type ShareNotifier } from './shares/notify.js';
 import { RECIPIENT_ROLES, TOKEN_PATTERN, hashToken, newToken, shareStoreFromEnv, type Recipient, type RecipientRole, type ShareStore } from './shares/store.js';
 import { runMapping } from './mapping/pipeline.js';
 import type { MappingEngine } from './mapping/types.js';
@@ -142,6 +143,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * @param auth     Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ * @param notifier Sends the instant "stopped" signal to open doctor pages (server/shares/notify.ts).
  * @param shares   Where doctor links are stored (server/shares/store.ts). Defaults to Supabase when the server key is set.
  * @param mapping  Plain → clinical engine. Defaults to the environment (server/mapping/config.ts): the free
  *                 rules engine unless MAPPING_ENGINE=claude and ANTHROPIC_API_KEY are both set.
@@ -150,7 +152,8 @@ export function createApp({
   auth = authConfigFromEnv(),
   mapping = mappingEngineFromEnv().engine,
   shares = shareStoreFromEnv(),
-}: { auth?: AuthConfig; mapping?: MappingEngine; shares?: ShareStore } = {}) {
+  notifier = shareNotifierFromEnv(),
+}: { auth?: AuthConfig; mapping?: MappingEngine; shares?: ShareStore; notifier?: ShareNotifier } = {}) {
   const signedIn = requireUser(auth, sendError);
   const app = express();
   app.disable('x-powered-by');
@@ -319,6 +322,8 @@ export function createApp({
   const accountOnly = requireUser({ ...auth, required: true }, sendError);
   const sharing = (_req: Request, res: Response, next: NextFunction) => (shares ? next() : sendError(res, 503, 'SHARING_NOT_CONFIGURED'));
   const userId = (res: Response) => (res.locals.user as { id: string }).id;
+  /** Best effort: a failed signal never fails the stop (open pages still re-check on their own). */
+  const signalStopped = (hashes: string[]) => notifier.stopped(hashes).catch(() => console.warn('[sharing] stop signal failed'));
 
   /**
    * POST /api/shares: share the one-page brief with ONE person (one link each).
@@ -352,12 +357,17 @@ export function createApp({
   api.delete('/shares/:id', accountOnly, sharing, async (req, res) => {
     const id = String(req.params.id);
     if (!/^[0-9a-f-]{8,64}$/i.test(id)) return sendError(res, 404, 'SHARE_NOT_FOUND');
-    return (await shares!.revoke(userId(res), id)) ? res.status(204).end() : sendError(res, 404, 'SHARE_NOT_FOUND');
+    const { found, stoppedHashes } = await shares!.revoke(userId(res), id);
+    if (!found) return sendError(res, 404, 'SHARE_NOT_FOUND');
+    await signalStopped(stoppedHashes); // open doctor pages clear at once
+    return res.status(204).end();
   });
 
   /** DELETE /api/shares: stop sharing with everyone. 200 { status: "ok", stopped: n } */
   api.delete('/shares', accountOnly, sharing, async (_req, res) => {
-    res.json({ status: 'ok', stopped: await shares!.revokeAll(userId(res)) });
+    const stopped = await shares!.revokeAll(userId(res));
+    await signalStopped(stopped);
+    res.json({ status: 'ok', stopped: stopped.length });
   });
 
   /**
@@ -383,8 +393,11 @@ export function createApp({
   api.delete('/account', requireUser({ ...auth, required: true }, sendError), async (_req, res) => {
     if (!auth.admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED');
     const user = res.locals.user as { id: string };
+    // Links still open on a doctor's screen are told right after the account (and with it every link) is gone.
+    const openLinks = shares ? await shares.activeHashes(user.id).catch(() => []) : [];
     const ok = await auth.admin.deleteUser(user.id);
     if (!ok) return sendError(res, 500, 'INTERNAL');
+    await signalStopped(openLinks);
     return res.status(204).end();
   });
 

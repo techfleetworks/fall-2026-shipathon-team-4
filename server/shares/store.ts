@@ -40,10 +40,12 @@ export interface SharedBriefRecord {
 export interface ShareStore {
   create(userId: string, recipient: Recipient, brief: BriefSnapshot, tokenHash: string, expiresAt: Date): Promise<ShareSummary>;
   list(userId: string): Promise<ShareSummary[]>;
-  /** Stops one link. False if it isn't this user's (or doesn't exist). */
-  revoke(userId: string, id: string): Promise<boolean>;
-  /** Stops every active link of this user. Returns how many were stopped. */
-  revokeAll(userId: string): Promise<number>;
+  /** Stops one link. found: false if it isn't this user's (or doesn't exist). stoppedHashes: links stopped just now (to signal). */
+  revoke(userId: string, id: string): Promise<{ found: boolean; stoppedHashes: string[] }>;
+  /** Stops every active link of this user. Returns the token hashes stopped just now. */
+  revokeAll(userId: string): Promise<string[]>;
+  /** Token hashes of this user's links that are still active (used before deleting the account). */
+  activeHashes(userId: string): Promise<string[]>;
   findByTokenHash(tokenHash: string): Promise<SharedBriefRecord | null>;
 }
 
@@ -77,14 +79,19 @@ export function memoryShareStore(): ShareStore & { deleteUser(userId: string): v
     },
     async revoke(userId, id) {
       const row = rows.find((r) => r.id === id && r.userId === userId);
-      if (!row) return false;
-      row.revokedAt ??= new Date().toISOString();
-      return true;
+      if (!row) return { found: false, stoppedHashes: [] };
+      if (row.revokedAt) return { found: true, stoppedHashes: [] };
+      row.revokedAt = new Date().toISOString();
+      return { found: true, stoppedHashes: [row.tokenHash] };
     },
     async revokeAll(userId) {
-      let n = 0;
-      for (const r of rows) if (r.userId === userId && !r.revokedAt) { r.revokedAt = new Date().toISOString(); n++; }
-      return n;
+      const hashes: string[] = [];
+      for (const r of rows) if (r.userId === userId && !r.revokedAt) { r.revokedAt = new Date().toISOString(); hashes.push(r.tokenHash); }
+      return hashes;
+    },
+    async activeHashes(userId) {
+      const now = Date.now();
+      return rows.filter((r) => r.userId === userId && !r.revokedAt && new Date(r.expiresAt).getTime() > now).map((r) => r.tokenHash);
     },
     async findByTokenHash(tokenHash) {
       const r = rows.find((x) => x.tokenHash === tokenHash);
@@ -147,17 +154,23 @@ export function supabaseShareStore(url: string, serviceKey: string): ShareStore 
         .eq('user_id', userId)
         .eq('id', id)
         .is('revoked_at', null)
-        .select('id');
+        .select('token_hash');
       if (error) throw new Error('shared_briefs revoke failed');
-      if (data.length) return true;
+      if (data.length) return { found: true, stoppedHashes: data.map((r) => r.token_hash as string) };
       // Already stopped still counts as stopped; someone else's (or no) link does not.
       const existing = await db.from('shared_briefs').select('id').eq('user_id', userId).eq('id', id).maybeSingle();
-      return !!existing.data;
+      if (existing.error) throw new Error('shared_briefs revoke check failed');
+      return { found: !!existing.data, stoppedHashes: [] };
     },
     async revokeAll(userId) {
-      const { data, error } = await db.from('shared_briefs').update({ revoked_at: new Date().toISOString() }).eq('user_id', userId).is('revoked_at', null).select('id');
+      const { data, error } = await db.from('shared_briefs').update({ revoked_at: new Date().toISOString() }).eq('user_id', userId).is('revoked_at', null).select('token_hash');
       if (error) throw new Error('shared_briefs revoke-all failed');
-      return data.length;
+      return data.map((r) => r.token_hash as string);
+    },
+    async activeHashes(userId) {
+      const { data, error } = await db.from('shared_briefs').select('token_hash').eq('user_id', userId).is('revoked_at', null).gt('expires_at', new Date().toISOString());
+      if (error) throw new Error('shared_briefs active lookup failed');
+      return data.map((r) => r.token_hash as string);
     },
     async findByTokenHash(tokenHash) {
       const { data, error } = await db
