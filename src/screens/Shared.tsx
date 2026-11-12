@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PublicLayout } from '../components/PublicLayout';
 import { APP_NAME } from '../lib/brand';
-import { fetchSharedBrief, type SharedBriefOutcome } from '../lib/sharesApi';
+import { watchSharedBrief } from '../lib/sharedBriefWatch';
+import type { SharedBriefOutcome } from '../lib/sharesApi';
 import { isLinkActive, useApp } from '../lib/store';
 import type { BriefSnapshot } from '../lib/types';
 import { DoctorBriefBody } from './Brief';
@@ -13,21 +14,36 @@ type Reason = 'missing' | 'revoked' | 'expired' | 'unavailable';
  * Shared doctor view (link, no login). Read-only snapshot of the brief.
  * Links made on this device (demo / local mode) are found in its storage. Any other link is looked up on
  * the server (GET /api/shared/:token, ADR-009), so the doctor can open it on their own device.
+ * Either way the open page keeps checking: when the patient stops sharing or the link expires, the brief
+ * is replaced by "This link was turned off" / "has expired" without a refresh.
  */
 export function SharedBrief() {
   const { token } = useParams();
   const link = useApp((s) => (s.shareLinks ?? []).find((l) => l.token === token));
   const [remote, setRemote] = useState<SharedBriefOutcome | 'loading' | null>(null);
 
+  // Server links: re-checked while open, so "Stop sharing" or expiry takes effect without a refresh.
   useEffect(() => {
     if (link || !token) return;
-    let live = true;
     setRemote('loading');
-    fetchSharedBrief(token).then((r) => live && setRemote(r));
-    return () => {
-      live = false;
-    };
+    return watchSharedBrief(token, setRemote);
   }, [link, token]);
+
+  // Links made on this device: pick up "Stop sharing" from another tab, and hide the brief the moment it expires.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!link) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key === 'get-heard') void useApp.persist.rehydrate();
+    };
+    window.addEventListener('storage', onStorage);
+    const ms = new Date(link.expiresAt).getTime() - Date.now();
+    const timer = ms > 0 && ms <= 2_147_000_000 ? setTimeout(() => setTick((n) => n + 1), ms + 500) : undefined;
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearTimeout(timer);
+    };
+  }, [link]);
 
   let shown: { brief: BriefSnapshot; expiresAt: string } | undefined;
   let reason: Reason | undefined;

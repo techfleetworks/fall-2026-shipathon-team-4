@@ -31,6 +31,9 @@ patient approves it by sharing.
 3. **Doctor view:** `GET /api/shared/:token`, public, read-only, `no-store`, `X-Robots-Tag: noindex`.
    404 unknown · 410 expired · 410 stopped. The doctor sees the recipient's name and role, not their email.
    `/shared/:token` (Diana's page) now asks the server when the link isn't on this device.
+   **The open page keeps checking** (`src/lib/sharedBriefWatch.ts`): every 30 s while visible, when the doctor returns to
+   the tab, and at the expiry time. So "Stop sharing" or expiry replaces the brief without a refresh (found in live testing,
+   Nov 12). A network blip keeps the brief on screen; only a definite stopped, expired or missing answer ends it.
 4. **Stop sharing:** `DELETE /api/shares/:id` stops one person. `DELETE /api/shares` stops everyone. `GET /api/shares`
    lists one row per person (no tokens). Every query is scoped to the signed-in user, so one patient can never see or
    stop another's links.
