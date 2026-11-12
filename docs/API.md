@@ -202,6 +202,44 @@ It never says what a result means for the person, by design. Other statuses: `cr
 (`EMPTY_RESULTS`, `INVALID_RESULTS`, `TEXT_TOO_LONG`), `unavailable`. For a CSV upload, `parseLabsCsv(text)` from
 `src/lib/labs/labs.ts` turns a labs.csv-style file into rows (other columns are ignored).
 
+## 2e. Share the one-page brief with the care team (new, ADR-009)
+
+One expiring link **per person** (PCP, therapist, psychiatrist…). The doctor opens it on any device without signing in.
+The patient can stop one person without affecting the others. Needs sign-in and the Supabase step in
+`docs/SUPABASE_SETUP.md` §8.
+
+```ts
+import { createShare, listShares, shareStatus, stopShare, stopAllShares } from '../../lib/sharesApi';
+import { shareEmailDraft } from '../../lib/shareEmail';
+import { buildBriefSnapshot } from '../../lib/brief';
+
+const out = await createShare({
+  brief: buildBriefSnapshot(state, visit, { talkingPoints, summary }),
+  recipient: { name: 'Dr. Lane', role: 'Primary care', email: 'lane@clinic.example', clinic: 'Riverside Clinic' },
+  days: 7,                                     // 1–30 (your 24 h / 7 days / 30 days picker)
+});
+if (out.status === 'ok') {
+  const email = shareEmailDraft({ recipient: out.share.recipient, url: out.url, expiresAt: out.share.expiresAt, patientName: profile.name });
+  window.location.href = email.mailto;          // opens the patient's own email app, ready to send
+  // out.url is shown ONCE (only a hash is stored): offer "Copy link" too. out.trimmed → "Shortened to fit one page."
+}
+// 'crisis' → crisis support (nothing shared) · 'rejected' → out.error.message · 'unavailable' → try again
+
+const list = await listShares();               // "Shared with": one row per person
+list.status === 'ok' && list.shares.map((s) => [s.recipient.name, s.recipient.role, shareStatus(s)]);  // active | expired | stopped
+await stopShare(id);                           // stop ONE person
+await stopAllShares();                         // stop everyone
+```
+
+Roles: `Primary care`, `Therapist`, `Psychiatrist`, `Specialist`, `Other`. The **email holds only the link and its end date**,
+never health details. `/shared/:token` already asks the server for links made on other devices.
+
+**For your screens (from the team notes):**
+- A "Shared with" list, one row per person with its own **Stop sharing** button. **Stop all** is optional.
+- Care-team fields: name, role, work email, hospital/clinic.
+- Deleting the account stops every share (the database deletes them). Say so in the delete dialog, and consider
+  the **type DELETE to confirm** pattern there.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

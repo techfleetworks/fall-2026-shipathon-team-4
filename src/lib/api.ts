@@ -30,7 +30,8 @@ let accessTokenProvider: () => Promise<string | null> = async () => null;
 export function setAccessTokenProvider(provider: () => Promise<string | null>): void {
   accessTokenProvider = provider;
 }
-async function jsonHeaders(): Promise<Record<string, string>> {
+/** JSON headers plus the sign-in token, when there is one. */
+export async function jsonHeaders(): Promise<Record<string, string>> {
   const token = await accessTokenProvider().catch(() => null);
   return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }

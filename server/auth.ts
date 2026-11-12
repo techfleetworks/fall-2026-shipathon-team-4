@@ -38,7 +38,8 @@ const MAX_TOKEN_CHARS = 4096;
 export function authConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   const url = env.SUPABASE_URL;
   const anon = env.SUPABASE_ANON_KEY;
-  const service = env.SUPABASE_SERVICE_ROLE_KEY;
+  // Trimmed: a stray space pasted before the key would otherwise make every admin call fail.
+  const service = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   const verifyToken: TokenVerifier | undefined =
     url && anon

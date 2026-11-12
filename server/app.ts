@@ -23,6 +23,8 @@ import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
+import { buildOnePageBrief } from './shares/brief.js';
+import { RECIPIENT_ROLES, TOKEN_PATTERN, hashToken, newToken, shareStoreFromEnv, type Recipient, type RecipientRole, type ShareStore } from './shares/store.js';
 import { runMapping } from './mapping/pipeline.js';
 import type { MappingEngine } from './mapping/types.js';
 import { parseStoryDraft } from './storyDraft.js';
@@ -30,6 +32,9 @@ import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
 /** Largest JSON body accepted. The transcript rules (200,000 characters) are stricter; this is the outer limit. */
 export const MAX_BODY = '1mb';
+
+/** Longest a doctor link can last (the app offers 1, 7 or 30 days). */
+export const MAX_SHARE_DAYS = 30;
 
 /** e.g. "appointment-ready-api", from the product name in src/lib/brand.ts. */
 const SERVICE_NAME = `${APP_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-api`;
@@ -55,6 +60,13 @@ export type ApiErrorCode =
   | 'EMPTY_TEXT'
   | 'TEXT_TOO_LONG'
   | 'INVALID_RESULTS'
+  | 'INVALID_SHARE'
+  | 'EMPTY_BRIEF'
+  | 'SHARE_NOT_FOUND'
+  | 'LINK_NOT_FOUND'
+  | 'LINK_EXPIRED'
+  | 'LINK_STOPPED'
+  | 'SHARING_NOT_CONFIGURED'
   | 'EMPTY_RESULTS'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
@@ -71,6 +83,13 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   EMPTY_STORY: 'Tell us a little about what’s been happening first.',
   INVALID_TEXT: 'Send a JSON object like { "text": "..." }.',
   EMPTY_TEXT: 'Paste the words you’d like explained first.',
+  INVALID_SHARE: `Send { "brief": {...}, "recipient": { "name", "role", "email", "clinic" }, "days": 1–${MAX_SHARE_DAYS} }. Role is one of: ${RECIPIENT_ROLES.join(', ')}.`,
+  EMPTY_BRIEF: 'Add at least one priority or symptom to your brief before sharing it.',
+  SHARE_NOT_FOUND: 'We couldn’t find that shared link in your account.',
+  LINK_NOT_FOUND: 'We can’t find this link. Check that the whole link was copied.',
+  LINK_EXPIRED: 'This link has expired. Ask the patient for a new one.',
+  LINK_STOPPED: 'The patient stopped sharing this link. Ask them for a new one.',
+  SHARING_NOT_CONFIGURED: 'Sharing with your doctor isn’t set up on the server yet.',
   INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
   EMPTY_RESULTS: 'Add a lab result or a clinical note to explain first.',
   TEXT_TOO_LONG: `That’s more than we can explain at once (limit ${MAX_EXPLAIN_CHARS.toLocaleString('en-US')} characters).`,
@@ -86,6 +105,19 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
 
 function sendError(res: Response, status: number, code: keyof typeof MESSAGES) {
   res.status(status).json({ status: 'error', error: { code, message: MESSAGES[code] } });
+}
+
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** A care-team member from a request. Email lowercased; unknown fields dropped. undefined = invalid. */
+function parseRecipient(input: unknown): Recipient | undefined {
+  if (!isPlainObject(input)) return undefined;
+  const { name, role, email, clinic = '' } = input;
+  if (typeof name !== 'string' || !name.trim() || name.length > 100) return undefined;
+  if (typeof role !== 'string' || !RECIPIENT_ROLES.includes(role as RecipientRole)) return undefined;
+  if (typeof email !== 'string' || email.length > 254 || !EMAIL.test(email.trim())) return undefined;
+  if (typeof clinic !== 'string' || clinic.length > 150) return undefined;
+  return { name: name.trim(), role: role as RecipientRole, email: email.trim().toLowerCase(), clinic: clinic.trim() };
 }
 
 /** Lab rows from a request: known fields only, strings within limits. undefined = invalid. Missing = no rows. */
@@ -110,13 +142,15 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * @param auth     Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ * @param shares   Where doctor links are stored (server/shares/store.ts). Defaults to Supabase when the server key is set.
  * @param mapping  Plain → clinical engine. Defaults to the environment (server/mapping/config.ts): the free
  *                 rules engine unless MAPPING_ENGINE=claude and ANTHROPIC_API_KEY are both set.
  */
 export function createApp({
   auth = authConfigFromEnv(),
   mapping = mappingEngineFromEnv().engine,
-}: { auth?: AuthConfig; mapping?: MappingEngine } = {}) {
+  shares = shareStoreFromEnv(),
+}: { auth?: AuthConfig; mapping?: MappingEngine; shares?: ShareStore } = {}) {
   const signedIn = requireUser(auth, sendError);
   const app = express();
   app.disable('x-powered-by');
@@ -280,6 +314,67 @@ export function createApp({
     }
   });
 
+  // ---------------------------------------------------------------- sharing with the care team (ADR-009)
+
+  const accountOnly = requireUser({ ...auth, required: true }, sendError);
+  const sharing = (_req: Request, res: Response, next: NextFunction) => (shares ? next() : sendError(res, 503, 'SHARING_NOT_CONFIGURED'));
+  const userId = (res: Response) => (res.locals.user as { id: string }).id;
+
+  /**
+   * POST /api/shares: share the one-page brief with ONE person (one link each).
+   * Body: { "brief": BriefSnapshot, "recipient": { "name", "role", "email", "clinic"? }, "days": 1–30 }
+   * 201 { status: "ok", share, path: "/shared/<token>", trimmed } (the token is shown only here, once)
+   * 200 { status: "crisis", help } (nothing shared) · 400 INVALID_SHARE / EMPTY_BRIEF · 401 · 503
+   */
+  api.post('/shares', accountOnly, sharing, async (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_SHARE');
+    const recipient = parseRecipient(body.recipient);
+    const days = body.days;
+    if (!recipient || typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > MAX_SHARE_DAYS) return sendError(res, 400, 'INVALID_SHARE');
+    const built = buildOnePageBrief(body.brief);
+    if (!built.ok) {
+      if (built.reason === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+      return sendError(res, 400, built.reason === 'empty' ? 'EMPTY_BRIEF' : 'INVALID_SHARE');
+    }
+    const token = newToken();
+    const share = await shares!.create(userId(res), recipient, built.brief, hashToken(token), new Date(Date.now() + days * 86_400_000));
+    return res.status(201).json({ status: 'ok', share, path: `/shared/${token}`, trimmed: built.trimmed });
+  });
+
+  /** GET /api/shares: everyone this patient shares with, one row per link (no tokens). */
+  api.get('/shares', accountOnly, sharing, async (_req, res) => {
+    res.json({ status: 'ok', shares: await shares!.list(userId(res)) });
+  });
+
+  /** DELETE /api/shares/:id: stop sharing with ONE person. Others keep working. 204 · 404 SHARE_NOT_FOUND */
+  api.delete('/shares/:id', accountOnly, sharing, async (req, res) => {
+    const id = String(req.params.id);
+    if (!/^[0-9a-f-]{8,64}$/i.test(id)) return sendError(res, 404, 'SHARE_NOT_FOUND');
+    return (await shares!.revoke(userId(res), id)) ? res.status(204).end() : sendError(res, 404, 'SHARE_NOT_FOUND');
+  });
+
+  /** DELETE /api/shares: stop sharing with everyone. 200 { status: "ok", stopped: n } */
+  api.delete('/shares', accountOnly, sharing, async (_req, res) => {
+    res.json({ status: 'ok', stopped: await shares!.revokeAll(userId(res)) });
+  });
+
+  /**
+   * GET /api/shared/:token: the doctor's view. Public (the link is the key), read-only, never indexed.
+   * 200 { status: "ok", brief, sharedWith: { name, role }, expiresAt } · 404 LINK_NOT_FOUND · 410 LINK_EXPIRED / LINK_STOPPED
+   */
+  api.get('/shared/:token', sharing, async (req, res) => {
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    const token = String(req.params.token);
+    if (!TOKEN_PATTERN.test(token)) return sendError(res, 404, 'LINK_NOT_FOUND');
+    const found = await shares!.findByTokenHash(hashToken(token));
+    if (!found) return sendError(res, 404, 'LINK_NOT_FOUND');
+    if (found.revokedAt) return sendError(res, 410, 'LINK_STOPPED');
+    if (new Date(found.expiresAt).getTime() <= Date.now()) return sendError(res, 410, 'LINK_EXPIRED');
+    return res.json({ status: 'ok', brief: found.brief, sharedWith: found.recipient, expiresAt: found.expiresAt });
+  });
+
   /**
    * DELETE /api/account: permanently deletes the signed-in user's account on the sign-in server. Their database
    * rows go with it (ON DELETE CASCADE). The app then wipes the device. Copy promise: "deleted whenever you ask".
@@ -293,7 +388,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
