@@ -14,12 +14,14 @@
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { APP_NAME } from '../src/lib/brand.js';
-import { translateStoryGuarded } from '../src/lib/engine.js';
 import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../src/lib/guardrails/copy.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
+import { mappingEngineFromEnv } from './mapping/config.js';
+import { runMapping } from './mapping/pipeline.js';
+import type { MappingEngine } from './mapping/types.js';
 import { parseStoryDraft } from './storyDraft.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
@@ -78,9 +80,14 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * @param auth  Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ * @param auth     Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ * @param mapping  Plain → clinical engine. Defaults to the environment (server/mapping/config.ts): the free
+ *                 rules engine unless MAPPING_ENGINE=claude and ANTHROPIC_API_KEY are both set.
  */
-export function createApp({ auth = authConfigFromEnv() }: { auth?: AuthConfig } = {}) {
+export function createApp({
+  auth = authConfigFromEnv(),
+  mapping = mappingEngineFromEnv().engine,
+}: { auth?: AuthConfig; mapping?: MappingEngine } = {}) {
   const signedIn = requireUser(auth, sendError);
   const app = express();
   app.disable('x-powered-by');
@@ -101,7 +108,7 @@ export function createApp({ auth = authConfigFromEnv() }: { auth?: AuthConfig } 
 
   /** GET /api/health: is the server up? Used by people and uptime monitors. */
   api.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: SERVICE_NAME, time: new Date().toISOString() });
+    res.json({ status: 'ok', service: SERVICE_NAME, mappingEngine: mapping.name, time: new Date().toISOString() });
   });
 
   /**
@@ -134,18 +141,19 @@ export function createApp({ auth = authConfigFromEnv() }: { auth?: AuthConfig } 
   /**
    * POST /api/prep-summary: "See it in doctor terms". Runs the engine with the guardrails on the server.
    * Body: { "draft": StoryDraft }  (only known fields are read; chip answers must be the app's own choices)
-   * 200 { status: "ok", fields, disclaimer } · 200 { status: "crisis", help } (engine never runs)
+   * 200 { status: "ok", fields, disclaimer, engine } · 200 { status: "crisis", help } (engine never runs)
    * 200 { status: "blocked", message, rules } (a guardrail was broken; nothing to show or save)
    * 400 invalid or empty story · 415 not JSON. Nothing is stored and the story is never logged.
    */
-  api.post('/prep-summary', signedIn, (req, res) => {
+  api.post('/prep-summary', signedIn, async (req, res) => {
     if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
     const body: unknown = req.body;
     if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_STORY');
     const parsed = parseStoryDraft(body.draft);
     if (!parsed.ok) return sendError(res, 400, 'INVALID_STORY');
 
-    const outcome = translateStoryGuarded(parsed.draft);
+    // Rules engine by default; the optional AI engine falls back to it on any problem (ADR-006).
+    const outcome = await runMapping(parsed.draft, mapping);
     switch (outcome.status) {
       case 'crisis':
         return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
@@ -155,7 +163,7 @@ export function createApp({ auth = authConfigFromEnv() }: { auth?: AuthConfig } 
       case 'ok': {
         const empty = outcome.fields.every((f) => f.clinical === 'Not discussed') && !parsed.draft.opening.trim();
         if (empty) return sendError(res, 400, 'EMPTY_STORY');
-        return res.status(200).json({ status: 'ok', fields: outcome.fields, disclaimer: DISCLAIMERS.short.body });
+        return res.status(200).json({ status: 'ok', fields: outcome.fields, disclaimer: DISCLAIMERS.short.body, engine: outcome.engine });
       }
     }
   });

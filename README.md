@@ -35,6 +35,7 @@ Landing · Onboarding (who / what brings you / privacy & consent / name / next v
 ## Next steps (per PRD / ADR-001)
 
 - Express API + Claude for the follow-up questions, the SOCRATES summary, the after-visit summary and the lab/note explainer. Swap `translateStory()` for the API call, and keep the rule-based version as the fallback.
+  - Done for plain → clinical mapping (ADR-006): free rules engine by default; Claude only with `MAPPING_ENGINE=claude` + `ANTHROPIC_API_KEY`. Eval: `npm run eval:mapping`.
 - Supabase auth + storage (RLS, hard delete), then real share links and push reminders.
 - "In the room" transcript paste/upload and the after-visit summary (F5/F8), plus the lab/note explainer (F9).
 - Clinical and PM review of the script and playbook copy (`src/data/`).

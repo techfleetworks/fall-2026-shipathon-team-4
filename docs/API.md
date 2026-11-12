@@ -91,11 +91,17 @@ choices (`ONSET_CHOICES` etc. in `translate.ts`), `severity.score` is 0–10, an
 
 | Response | Body |
 |---|---|
-| `200` | `{ "status": "ok", "fields": SummaryField[], "disclaimer": "Not a diagnosis or medical advice — a tool to help you be heard." }` |
+| `200` | `{ "status": "ok", "fields": SummaryField[], "disclaimer": "Not a diagnosis or medical advice — a tool to help you be heard.", "engine": "rules" \| "claude" }` |
 | `200` | `{ "status": "crisis", "help": { "message", "resources" } }`: the engine never ran |
 | `200` | `{ "status": "blocked", "message", "rules": ["no-diagnosis", ...] }` |
 | `400` | `{ "status": "error", "error": { "code": "INVALID_STORY" \| "EMPTY_STORY", "message" } }` |
 | `415` | Body wasn't JSON |
+
+**Which engine answers (ADR-006).** By default the free rule-based engine. The server can optionally add
+Claude (`MAPPING_ENGINE=claude` plus `ANTHROPIC_API_KEY`, server env only). Claude can then only *add* approved terms the word
+list missed, each backed by the patient's exact words. If anything goes wrong (slow, down, an invented term), the
+answer quietly comes from the rules engine. **Nothing changes for the screens**: same statuses, same fields.
+`engine` is informational, and `GET /api/health` shows `mappingEngine`. Quality check: `npm run eval:mapping`.
 
 ---
 
