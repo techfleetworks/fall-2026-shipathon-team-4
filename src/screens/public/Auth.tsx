@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
@@ -32,6 +32,12 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const [email, setEmail] = useState(theo?.email ?? '');
   const [password, setPassword] = useState(theo?.password ?? '');
   const [error, setError] = useState<string | null>(null);
+  // Also when arriving from another page that reuses this screen (e.g. the demo's sign-up notice → "Log in as Theo").
+  useEffect(() => {
+    if (!theo) return;
+    setEmail(theo.email);
+    setPassword(theo.password);
+  }, [theo]);
 
   const switchTo = (m: 'signup' | 'login') => {
     setError(null);

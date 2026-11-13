@@ -28,6 +28,14 @@ user's own data** on that device with Theo's.
   in the login form (`/login?as=theo`). The demo site needs the same Supabase settings as the real users' site, since Theo lives in that project.
 - **No duplicate work:** code, Theo's data (`npm run seed:theo`) and database migrations are done once. Only Vercel settings are per site.
 
+## Update (Nov 13): two Supabase projects
+
+The team wants the sites to differ in sign-in rules (e.g. confirm email for real users only). Those are Supabase **project** settings, so the
+demo got its own Supabase project, **Appointment Ready DEMO**, holding only Theo, with sign-ups off and confirm email off. The same 3 migrations
+were run there, and `npm run seed:theo:demo` (keys in the git-ignored `.env.demo-server.local`) created Theo. Theo's public password now can't reach
+the real users' project at all. On the demo site, `/signup` shows a notice that links to the real site (`VITE_LIVE_URL`) or offers Theo's login.
+Verified locally: the demo site logged in as Theo with a session from the DEMO project; the real project was not touched.
+
 ## Consequences
 
 - Real users' data is never at risk from the demo, because the demo runs on another site (separate browser storage).
