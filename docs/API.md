@@ -163,6 +163,131 @@ lines from the clinician's. Without it, speakers named "Dr. …", "Nurse …" et
 `200 { status: "ok", doctorSaid, clinicians, dialogueTurns, disclaimer }` · `200 { status: "crisis", help }` · `400` · `415`.
 Store the lines with `source: 'transcript'` (the Recap pill then reads "★ From your transcript").
 
+## 2c. Clinical → plain: `POST /api/explain` (new, ADR-007)
+
+Explains clinical words and note shorthand in plain language, from a reviewed glossary (no AI, free).
+Works on a clinical note, what the doctor said, or the app's own doctor-terms lines.
+
+```ts
+import { requestExplanation } from '../../lib/api';
+
+const out = await requestExplanation('?orthostatic hypotension, RV in 4/52');
+if (out.status === 'ok') out.explanations; // [{ found: '?', plain: 'Query (or a "?" …)…' }, { found: 'orthostatic hypotension', plain: 'Blood pressure that drops…' }, …]
+```
+
+Each explanation is `{ id, term, kind: 'term' | 'shorthand', found, plain }`, in reading order. An empty list
+means there was nothing to explain. Other statuses: `crisis` (go to crisis support), `blocked` (show `message`),
+`rejected` (`EMPTY_TEXT`, `TEXT_TOO_LONG` over 20,000 characters, `INVALID_TEXT`), `unavailable`.
+No server needed for tooltips: `explainClinical(text)` from `src/lib/explain/explain.ts` gives the same answer on the device.
+Placement is yours, e.g. a "What this means" link under each doctor-terms line.
+
+## 2d. Labs & notes → plain: `POST /api/explain-results` (new, ADR-008)
+
+Lab results placed against the range printed on the report, plus the clinical-note terms (§2c), in one call. Free, no AI.
+
+```ts
+import { requestResultsExplanation } from '../../lib/api';
+import { THEO_CLINICAL_NOTE, THEO_LABS } from '../../data/sampleResults';   // demo data (synthetic)
+
+const out = await requestResultsExplanation({ labs: [...THEO_LABS], note: THEO_CLINICAL_NOTE });
+if (out.status === 'ok') {
+  out.labs;      // [{ test, value, typicalRange?, position: 'above'|'within'|'below'|'change'|'no-range'|'not-compared', summary, about? }]
+  out.note;      // same shape as /api/explain
+  out.labsNote;  // "Typical ranges differ between labs…": show once near the labs
+}
+```
+
+Example: `{ test: 'Fasting glucose', value: '104 mg/dL', position: 'above', summary: '104 mg/dL is above the typical range shown (70-99).', about: 'Blood sugar measured after not eating, usually overnight.' }`.
+It never says what a result means for the person, by design. Other statuses: `crisis`, `blocked`, `rejected`
+(`EMPTY_RESULTS`, `INVALID_RESULTS`, `TEXT_TOO_LONG`), `unavailable`. For a CSV upload, `parseLabsCsv(text)` from
+`src/lib/labs/labs.ts` turns a labs.csv-style file into rows (other columns are ignored).
+
+## 2e. Share the one-page brief with the care team (new, ADR-009)
+
+One expiring link **per person** (PCP, therapist, psychiatrist…). The doctor opens it on any device without signing in.
+The patient can stop one person without affecting the others. Needs sign-in and the Supabase step in
+`docs/SUPABASE_SETUP.md` §8.
+
+```ts
+import { createShare, listShares, shareStatus, stopShare, stopAllShares } from '../../lib/sharesApi';
+import { shareEmailDraft } from '../../lib/shareEmail';
+import { buildBriefSnapshot } from '../../lib/brief';
+
+const out = await createShare({
+  brief: buildBriefSnapshot(state, visit, { talkingPoints, summary }),
+  recipient: { name: 'Dr. Lane', role: 'Primary care', email: 'lane@clinic.example', clinic: 'Riverside Clinic' },
+  days: 7,                                     // 1–30 (your 24 h / 7 days / 30 days picker)
+});
+if (out.status === 'ok') {
+  const email = shareEmailDraft({ recipient: out.share.recipient, url: out.url, expiresAt: out.share.expiresAt, patientName: profile.name });
+  window.location.href = email.mailto;          // opens the patient's own email app, ready to send
+  // out.url is shown ONCE (only a hash is stored): offer "Copy link" too. out.trimmed → "Shortened to fit one page."
+}
+// 'crisis' → crisis support (nothing shared) · 'rejected' → out.error.message · 'unavailable' → try again
+
+const list = await listShares();               // "Shared with": one row per person
+list.status === 'ok' && list.shares.map((s) => [s.recipient.name, s.recipient.role, shareStatus(s)]);  // active | expired | stopped
+await stopShare(id);                           // stop ONE person
+await stopAllShares();                         // stop everyone
+```
+
+Roles: `Primary care`, `Therapist`, `Psychiatrist`, `Specialist`, `Other`. The **email holds only the link and its end date**,
+never health details. `/shared/:token` already asks the server for links made on other devices, and an open doctor page clears **within about a
+second** when the patient stops sharing (Supabase Realtime signal; 30-second re-check as backup). Nothing to build on your side.
+
+**For your screens (from the team notes):**
+- A "Shared with" list, one row per person with its own **Stop sharing** button. **Stop all** is optional.
+- Care-team fields: name, role, work email, hospital/clinic.
+- Deleting the account stops every share (the database deletes them). Say so in the delete dialog, and consider
+  the **type DELETE to confirm** pattern there.
+
+## 2f. Theo's demo from the server: `GET /api/demo` (new, ADR-010)
+
+"Explore with demo data" (Landing and Settings) now calls `startDemo(loadDemo)` from `src/lib/demoApi.ts`. It loads Theo from
+the server and falls back to the built-in `buildDemoState()` if the server doesn't answer within 3 seconds. **Nothing to change on
+your side.** Your demo content is the source: after you edit `src/data/demo.ts`, a backend dev runs `npm run seed:theo`.
+Theo's past visit now has `recap.source: 'transcript'` with Dr. Lane's lines, which your Recap shows as "From your transcript".
+The response includes `label: "Synthetic — illustrative only, not medical advice."`
+
+**Logging in as Theo** (`theo.demo@example.com`; the password is in the team's `.env.local`) loads his record via `GET /api/me/app-data`
+(already wired in `Auth.tsx`). Logging out in demo mode clears Theo from the device. For the shared account, "Delete account" and creating
+doctor links are refused (403 `DEMO_ACCOUNT_READ_ONLY`, with a friendly message), so you may want to hide those buttons when `demoMode` is on.
+
+## 2g. Plain-language after-visit summary (new, ADR-011)
+
+Theo's past visit now has `visit.afterVisit` (and your Recap already shows its plain "What the doctor said" lines, plus ✓ on
+talking points that came up):
+
+```ts
+visit.afterVisit = {
+  youRaised:  ['You talked about feeling very sleepy in the day.', …],
+  doctorSaid: ['The doctor thinks this is from the depression.', …],   // same as visit.recap.doctorSaid
+  plan:       ['Wait and see for now.', 'No change for now.', 'Check again next month.'],
+  notCovered: ['The doctor did not talk about feeling dizzy when you stand up.'],
+  talkingPoints: [{ text, raised }], readingGrade: 3.4, meetsReadingTarget: true,
+}
+```
+
+**Not shown yet, your call where:** `plan` (it fits the After → Next steps step) and `notCovered` (e.g. "Not covered at this visit"
+under the Recap; it's the strongest line for the next visit). For a visit with only quick notes, `summarizeNotes(visit.notes)` from
+`src/lib/afterVisit/summary.ts` gives the same shape on the device. `POST /api/visit-summary` also returns `summary` (send
+`talkingPoints` to get `raised`), ready for when recording and transcription exist.
+
+## 2h. Suggested questions from goal + history (new, ADR-012)
+
+`suggestQuestions(state, visit, todayISO())` from `src/lib/questions/suggest.ts` → up to 5 `{ id, text, why }`, built only from the
+patient's own record (what wasn't covered last time, the timeline, what the last visit concluded, the plan). **Already wired** into your
+talking-points step: they come first in the `Priorities` suggestion chips. Ideas for you: show `why` under each (e.g. "Not covered at
+your visit on Nov 4."), relabel the chips "From your history", or give them their own "Questions to ask" list, since chips hide once
+a visit has 3 talking points (Theo's next visit does).
+
+## 2i. Action items (new, ADR-013)
+
+**Nothing to build:** action items are saved as normal follow-ups, so your **Next steps** screen already lists them (Theo's shows
+"Ask about feeling dizzy when you stand up · You · by Dec 3"). For a visit summarized on the device:
+`extractActionItems(visit.afterVisit, { visitDate: visit.date, clinician: visit.clinician, upcomingVisits: state.visits, existing })`
+from `src/lib/afterVisit/actionItems.ts` returns `{ step, owner, dueDate, isVisit, why }[]`, ready for `addFollowUp`. Optional: show `why`.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

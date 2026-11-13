@@ -4,6 +4,7 @@ import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
+import { fetchMyAppData } from '../../lib/demoApi';
 import { selectHasAccount, useApp } from '../../lib/store';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,6 +21,7 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const profile = useApp((s) => s.profile);
   const hasAccount = useApp(selectHasAccount);
   const signIn = useApp((s) => s.signIn);
+  const loadDemo = useApp((s) => s.loadDemo);
   const [busy, setBusy] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -49,6 +51,15 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
       setBusy(false);
       if (result.status === 'error' || result.status === 'confirm-email') return setError(result.message);
       if (result.status !== 'ok') return setError('Sign-in isn’t available right now. Please try again.');
+      // Theo (the shared demo account): load his record from the server and go straight in (ADR-010).
+      if (mode === 'login') {
+        const mine = await fetchMyAppData();
+        if (mine?.isDemoAccount) {
+          loadDemo(mine.data);
+          signIn();
+          return navigate('/home', { replace: true });
+        }
+      }
       // This device already has this person's app data: just sign in.
       if (mode === 'login' && profile?.onboarded && profile.email === em) {
         signIn();
