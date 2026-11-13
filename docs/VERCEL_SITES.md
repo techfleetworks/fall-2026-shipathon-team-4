@@ -34,8 +34,8 @@ public password can't reach the project that holds real people's accounts.
 ## On your computer
 | File (git-ignored) | Project | Commands that use it |
 |---|---|---|
-| `.env.local` | real | `npm run dev:api:supabase`, `npm run seed:theo` (only if you ever need Theo in the real project) |
-| `.env.demo-server.local` | DEMO | `npm run dev:api:demo`, **`npm run seed:theo:demo`** |
+| `.env.local` | real | `npm run dev:api:supabase` (Theo is **not** in the real project) |
+| `.env.demo-server.local` | DEMO | `npm run dev:api:demo`, **`npm run seed:theo`** (same as `seed:theo:demo`: both only ever write to the DEMO project) |
 
 ## Rule for database changes
 A new file in `supabase/migrations/` is run **in both projects** (SQL Editor → paste → Run). After a change to Theo's data, run

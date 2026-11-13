@@ -15,7 +15,7 @@
     "test:unit": "vitest run",
     "test:bdd": "node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js",
     "eval:mapping": "node --import tsx scripts/eval-mapping.ts",
-    "seed:theo": "node --env-file=.env.local --import tsx scripts/seed-theo.ts",
+    "seed:theo": "node --env-file=.env.demo-server.local --import tsx scripts/seed-theo.ts",
     "seed:theo:demo": "node --env-file=.env.demo-server.local --import tsx scripts/seed-theo.ts"
   },
   "dependencies": {

@@ -35,6 +35,8 @@ demo got its own Supabase project, **Appointment Ready DEMO**, holding only Theo
 were run there, and `npm run seed:theo:demo` (keys in the git-ignored `.env.demo-server.local`) created Theo. Theo's public password now can't reach
 the real users' project at all. On the demo site, `/signup` shows a notice that links to the real site (`VITE_LIVE_URL`) or offers Theo's login.
 Verified locally: the demo site logged in as Theo with a session from the DEMO project; the real project was not touched.
+The leftover Theo in the real project was then deleted (team OK; login, profile and data row; 1 real user remains), and both seed commands
+now read `.env.demo-server.local`, so Theo can only be created in the DEMO project.
 
 ## Consequences
 
