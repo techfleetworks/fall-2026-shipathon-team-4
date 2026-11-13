@@ -12,7 +12,7 @@ Feature: After a visit, a short list of what happens next and who does it
   Scenario: The plan, the doctor's promise and what was skipped become next steps
     When action items are extracted from a visit where Dr. Kim says "Let us run a thyroid panel and an ECG today. We will follow up in two weeks."
     Then there is a step "Book a follow-up visit with Dr. Kim" for "You"
-    And there is a step "Run a thyroid panel and an ECG" for "Dr. Kim"
+    And there is a step "Thyroid panel and an ECG" for "Dr. Kim"
     And there is a step "Ask about feeling dizzy when you stand up" for "You"
 
   @audience:patient @usecase:ai-already-booked @category:edge @quality:functional @severity:medium

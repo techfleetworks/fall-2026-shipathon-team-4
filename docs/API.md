@@ -288,6 +288,13 @@ a visit has 3 talking points (Theo's next visit does).
 `extractActionItems(visit.afterVisit, { visitDate: visit.date, clinician: visit.clinician, upcomingVisits: state.visits, existing })`
 from `src/lib/afterVisit/actionItems.ts` returns `{ step, owner, dueDate, isVisit, why }[]`, ready for `addFollowUp`. Optional: show `why`.
 
+## 2j. After-visit summary for real users (new, ADR-014)
+
+**Already wired, nothing to build.** `useAfterVisitSummary(visit)` runs at the top of your Recap and Next steps screens. For a past
+visit with quick notes (typed or from live capture), it calls `POST /api/notes-summary` once and saves the plain recap (only if there
+isn't one), ticks covered talking points, and adds the action items to Next steps. Doctor tasks are named like your step ideas
+("Blood test", "Referral to a therapist").
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

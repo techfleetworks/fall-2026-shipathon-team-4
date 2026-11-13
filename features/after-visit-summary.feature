@@ -39,3 +39,10 @@ Feature: After a visit, a short plain-language summary of what happened
   Scenario: No recording, only quick notes
     When the quick notes "follow up in 4 weeks" are summarized
     Then the plan says "Check again in 4 weeks."
+
+  @audience:patient @usecase:avs-real-user-notes @category:happy-path @quality:functional @severity:high
+  Scenario: A real user's quick notes become a plain summary and next steps
+    Given a real user's past visit with Dr. Kim has the quick notes "Dr said it might be orthostatic hypotension. follow up in 4 weeks"
+    When they open After for that visit
+    Then the recap says "Dr said it might be feeling dizzy when you stand up"
+    And a next step "Book a follow-up visit with Dr. Kim" is added

@@ -31,6 +31,8 @@ export interface AfterVisitSummary {
   /** Flesch-Kincaid grade of the summary's own sentences (quotes excluded). */
   readingGrade: number;
   meetsReadingTarget: boolean;
+  /** For summaries made from a visit's notes: which notes they came from, so the app re-runs only when they change. */
+  basedOn?: string;
 }
 
 export type AfterVisitResult =
@@ -38,7 +40,8 @@ export type AfterVisitResult =
   | { status: 'crisis' }
   | { status: 'blocked'; message: string; violations: Violation[] };
 
-const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+/** Splits into sentences, but not after a title ("Dr. Kim", "Mrs. Lee"). */
+const sentencesOf = (text: string) => text.split(/(?<!\b(?:Dr|Mr|Mrs|Ms|Mx|St)\.)(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 const uniq = (xs: string[]) => [...new Set(xs)];
 
 /** "It's probably the depression" → "depression". */
@@ -49,6 +52,8 @@ const ADJUST = /\b(?:body|you)\b.*\b(?:adjusts?|get used to|settle)\b/i;
 const WAIT = /\bgive it (?:some )?time\b|\bwait and see\b|\blet'?s wait\b/i;
 const NO_CHANGE = /\bpush through\b|\bkeep going\b|\bstay the course\b|\bsame dose\b|\bno change\b|\bcontinue (?:the|your) (?:current )?(?:dose|medication|meds)\b/i;
 const FOLLOW_UP = /\breassess\b|\bre-?check\b|\bcheck (?:it |back |in )?again\b|\bfollow[- ]?up\b|\bsee you\b|\bcome back\b/i;
+/** In notes: "She will order a blood test", "Dr. Kim is going to refer me", "they'll call me". */
+const NOTES_PROMISE = /\b(?:she|he|they|the doctor|the clinic|the nurse|dr\.? ?[a-z]+)(?:'ll| will| is going to| are going to)\s+(order|send|run|schedule|refer me|book|call me|recheck|check|test|get)\b\s*([^.?!]*)/i;
 /** "I'll order a blood test", "let us run an ECG": something the clinician or clinic will do. */
 const PROMISE = /\b(?:I'?ll|I will|we'?ll|we will|let'?s|let us)\s+(order|send|run|schedule|refer you|book|call you|recheck|check|test|get)\b\s*([^.?!]*)/i;
 const WHEN = /\b(next (?:week|month|visit)|in (?:\d+|a few|one|two|three|four|six) (?:days?|weeks?|months?))\b/i;
@@ -59,6 +64,20 @@ const MED_WORD = /\b(?:medication|medicine|meds|dose|pills?)\b/i;
 function pairsIn(text: string): ReversePair[] {
   const vocab = matchSymptoms(text);
   return REVERSE_PAIRS.filter((p) => vocab.includes(p.vocab) || p.jargon.test(text));
+}
+
+/**
+ * A doctor task as a short noun, like the app's own next-step names ("Blood test", "Therapist referral"):
+ * "order a blood test" → "Blood test", "refer me to a therapist" → "Referral to a therapist".
+ */
+export function taskName(verb: string, rest: string): string {
+  const v = verb.toLowerCase();
+  const obj = rest.trim().replace(/\s+today$/i, '').replace(/[.!?]+$/, '').replace(/^(?:me\s+)?(?:an?|the|some)\s+/i, '');
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+  if (v.startsWith('refer')) return obj ? `Referral ${obj.replace(/^me\s+/i, '')}` : 'Referral';
+  if (v.startsWith('call')) return obj ? `Call ${obj}` : 'Call from the clinic';
+  if (!obj) return cap(v);
+  return cap(obj);
 }
 
 function talkedAbout(pair: ReversePair, doctorText: string): boolean {
@@ -142,7 +161,7 @@ export function summarizeVisit(
     } else if (PROMISE.test(s) && !FOLLOW_UP.test(s)) {
       const m = PROMISE.exec(s)!;
       const task = toPlainWords(`${m[1]} ${m[2]}`.trim()).replace(/\s+today$/i, '');
-      promised.push(task.charAt(0).toUpperCase() + task.slice(1));
+      promised.push(taskName(m[1], toPlainWords(m[2])));
       doctorSaid.push(`The doctor will ${task}.`);
     } else if (WAIT.test(s) || NO_CHANGE.test(s) || FOLLOW_UP.test(s)) {
       // Plan sentences go to "plan".
@@ -166,13 +185,20 @@ export function summarizeVisit(
 /** Summary from the patient's quick notes, when the visit wasn't recorded. */
 export function summarizeNotes(notes: string, { talkingPoints = [] }: { talkingPoints?: readonly string[] } = {}): AfterVisitResult {
   if (hasCrisisLanguage(notes, ...talkingPoints)) return { status: 'crisis' };
-  const lines = notes.split(/\n+/).map((l) => l.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
+  // One item per line AND per sentence: people often type several points on one line.
+  const lines = notes.split(/\n+/).flatMap((l) => sentencesOf(l.replace(/^[-•*]\s*/, '').trim())).filter(Boolean);
   const plan = planFrom(lines.join('. '));
   const doctorSaid = lines.filter((l) => !WAIT.test(l) && !NO_CHANGE.test(l) && !FOLLOW_UP.test(l)).map((l) => `Your notes: ${toPlainWords(l)}`);
+  // Notes describe the doctor in the third person: "She will order a blood test", "Dr. Kim will refer me".
+  const promised = uniq(lines.flatMap((l) => {
+    const m = NOTES_PROMISE.exec(l);
+    if (!m) return [];
+    return [taskName(m[1], toPlainWords(m[2]))];
+  }));
   const raisedPairs = pairsIn(notes);
   const points = talkingPoints.map((text) => ({ text, raised: pointRaised(text, notes, raisedPairs) }));
   return finish(
-    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${p.text}.`), promised: [], talkingPoints: points },
+    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${p.text}.`), promised, talkingPoints: points },
     `${notes}\n${talkingPoints.join('\n')}`,
   );
 }
