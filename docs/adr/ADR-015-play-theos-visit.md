@@ -24,13 +24,11 @@ demo visitors get **401** from the summary endpoints. The other deployment (`…
   (sample recording)". It fills the visit like a recorded one (`recap.source: 'transcript'`, `recording: 'agreed'`, ticked talking
   points, `afterVisit`, Next steps through the same `planAfterVisitUpdate` as real users), then opens After. If the server can't be reached,
   it shows a retry message.
-- Wording fixes found along the way: question talking points become "Ask: …?" (not "Ask about What…?"), other talking points start lowercase
-  ("Ask about trouble sleeping"), and a question keeps its own "?" (no "timing?.").
 
 ## Consequences
 
 - Visitors see the full loop on Theo's upcoming visit: talking points, play, then a plain Recap, ✓ on sleepiness and dizziness, ✗ on the options
-  question, and Next steps ("Ask about feeling dizzy when you stand up", "Ask: What are the options…?", "Book a follow-up visit").
+  question, and Next steps ("Ask about feeling dizzy when you stand up", "Ask about What are the options…?", "Book a follow-up visit").
 - The button is on Diana's screen, so she should confirm the placement and wording.
 - **Still open:** other server features (e.g. "Your doctor reads" on Before) still need sign-in on the Supabase deployment, so they're empty for
   signed-out demo visitors there. And the demo still shares storage with a real user on the same device (see the separate-demo-space proposal).

@@ -43,8 +43,6 @@ export type AfterVisitResult =
 /** Splits into sentences, but not after a title ("Dr. Kim", "Mrs. Lee"). */
 const sentencesOf = (text: string) => text.split(/(?<!\b(?:Dr|Mr|Mrs|Ms|Mx|St)\.)(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 const uniq = (xs: string[]) => [...new Set(xs)];
-/** Adds a period unless the text already ends a sentence ("…or change timing?" stays as is). */
-const endSentence = (t: string) => (/[.?!]\s*$/.test(t) ? t.trim() : `${t.trim()}.`);
 
 /** "It's probably the depression" → "depression". */
 const CAUSE = /\b(?:probably|likely|just|put it down to|it'?s|blame it on)\s+(?:the\s+|your\s+)?(depression|anxiety|stress|your mood|mood|age|hormones|in your head)\b/i;
@@ -176,7 +174,7 @@ export function summarizeVisit(
     ...raised.filter((p) => !talkedAbout(p, doctorText)).map((p) => `The doctor did not talk about ${p.plain}.`),
   ];
   const points = talkingPoints.map((text) => ({ text, raised: pointRaised(text, patientText, raised) }));
-  for (const p of points) if (!p.raised) notCovered.push(`This talking point did not come up: ${endSentence(p.text)}`);
+  for (const p of points) if (!p.raised) notCovered.push(`This talking point did not come up: ${p.text}.`);
 
   return finish(
     { source: 'transcript', youRaised: uniq(youRaised), doctorSaid: uniq(doctorSaid), plan: planFrom(doctorText), notCovered: uniq(notCovered), promised: uniq(promised), talkingPoints: points },
@@ -200,7 +198,7 @@ export function summarizeNotes(notes: string, { talkingPoints = [] }: { talkingP
   const raisedPairs = pairsIn(notes);
   const points = talkingPoints.map((text) => ({ text, raised: pointRaised(text, notes, raisedPairs) }));
   return finish(
-    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${endSentence(p.text)}`), promised, talkingPoints: points },
+    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${p.text}.`), promised, talkingPoints: points },
     `${notes}\n${talkingPoints.join('\n')}`,
   );
 }

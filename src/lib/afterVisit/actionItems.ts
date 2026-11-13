@@ -75,11 +75,8 @@ export function extractActionItems(summary: AfterVisitSummary, ctx: ActionContex
 
   // 3. Raise again what wasn't covered.
   for (const line of summary.notCovered) {
-    const topic = /^The doctor did not talk about (.+)\.$/.exec(line)?.[1] ?? /^This talking point (?:did not come up|is not in your notes): (.+?)\.?$/.exec(line)?.[1];
-    if (!topic) continue;
-    // A talking point that is already a question is asked as-is; anything else reads "Ask about trouble sleeping".
-    const step = /\?\s*$/.test(topic) ? `Ask: ${topic}` : `Ask about ${topic.charAt(0).toLowerCase()}${topic.slice(1)}`;
-    items.push({ step, owner: 'You', dueDate: nextVisitDate, isVisit: false, why: `Not covered at your visit on ${when}.` });
+    const topic = /^The doctor did not talk about (.+)\.$/.exec(line)?.[1] ?? /^This talking point (?:did not come up|is not in your notes): (.+)\.$/.exec(line)?.[1];
+    if (topic) items.push({ step: `Ask about ${topic}`, owner: 'You', dueDate: nextVisitDate, isVisit: false, why: `Not covered at your visit on ${when}.` });
   }
 
   const have = new Set((ctx.existing ?? []).map((f) => f.step.trim().toLowerCase()));

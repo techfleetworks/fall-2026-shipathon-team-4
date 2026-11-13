@@ -26,8 +26,6 @@ describe('POST /api/demo/play-visit', () => {
     expect(res.body.label).toBe('Synthetic — illustrative only, not medical advice.');
     expect(res.body.summary.plan).toContain('Check again next month.');
     expect(res.body.summary.talkingPoints.map((p: { raised: boolean }) => p.raised)).toEqual([true, true, false]);
-    // A question keeps its own question mark (no "timing?.").
-    expect(res.body.summary.notCovered).toContain('This talking point did not come up: What are the options: lower the dose, switch, or change timing?');
   });
 
   it('never summarizes text a visitor sends: only Theo’s own transcript', async () => {
@@ -69,7 +67,7 @@ describe('playDemoVisit (browser client) + saving it to the visit', () => {
     expect(u.newFollowUps.map((f) => f.step)).toEqual([
       'Book a follow-up visit with Dr. Lane',
       'Ask about feeling dizzy when you stand up',
-      'Ask: What are the options: lower the dose, switch, or change timing?',
+      'Ask about What are the options: lower the dose, switch, or change timing?',
     ]);
   });
 
