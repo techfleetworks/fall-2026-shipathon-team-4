@@ -7,7 +7,7 @@ import './styles.css';
 
 registerSW({ immediate: true });
 
-// Keep the browser's install prompt so Settings → Install the app can offer it.
+// Keep the browser's install prompt so Settings → Save to Homescreen can offer it.
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   (window as unknown as { __installPrompt?: Event }).__installPrompt = e;

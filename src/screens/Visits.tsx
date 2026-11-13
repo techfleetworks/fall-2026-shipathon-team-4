@@ -16,6 +16,7 @@ function whoLabel(v: Visit) {
 }
 
 const SPECIALTIES = ['Primary care', 'Psychiatrist', 'Therapist', 'ER / hospital', 'Other'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* ======================================================================
    V1 · Visits: all visits
@@ -115,22 +116,36 @@ function AddVisitDialog() {
   const addVisit = useApp((s) => s.addVisit);
   const [when, setWhen] = useState(params.get('date') ? `${params.get('date')}T09:00` : '');
   const [who, setWho] = useState(params.get('with') ?? '');
-  const [specialty, setSpecialty] = useState<string | undefined>();
+  const [email, setEmail] = useState('');
+  const [affiliation, setAffiliation] = useState('');
+  const [specialty, setSpecialty] = useState('');
+  const [otherSpecialty, setOtherSpecialty] = useState('');
   const [reason, setReason] = useState('');
+  const [emailError, setEmailError] = useState(false);
   const date = when.slice(0, 10);
   const time = when.length > 10 ? when.slice(11, 16) : undefined;
   const isPast = !!date && date < todayISO();
   const close = () => navigate('/visits');
 
   const save = () => {
-    if (hasCrisisLanguage(reason, who)) { navigate('/help/now'); return; }
-    const id = addVisit({ date, time, clinician: who.trim() || undefined, specialty, reason: reason.trim() || undefined });
+    const em = email.trim();
+    if (em && !EMAIL_RE.test(em)) { setEmailError(true); return; }
+    if (hasCrisisLanguage(reason, who, otherSpecialty, affiliation)) { navigate('/help/now'); return; }
+    const type = specialty === 'Other' ? otherSpecialty.trim() || 'Other' : specialty || undefined;
+    const id = addVisit({
+      date, time,
+      clinician: who.trim() || undefined,
+      clinicianEmail: em || undefined,
+      affiliation: affiliation.trim() || undefined,
+      specialty: type,
+      reason: reason.trim() || undefined,
+    });
     navigate(isPast ? `/visits/${id}/after/check-in` : `/visits/${id}/before`, { replace: true });
   };
 
   return (
     <Modal title="Add a visit" onClose={close}>
-      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (date) save(); }}>
+      <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); if (date) save(); }}>
         <div className="field">
           <label htmlFor="av-when">Date and time</label>
           <input id="av-when" type="datetime-local" className="input" value={when} onChange={(e) => setWhen(e.target.value)} />
@@ -140,9 +155,30 @@ function AddVisitDialog() {
           <label htmlFor="av-who">Who are you seeing?</label>
           <input id="av-who" className="input" value={who} onChange={(e) => setWho(e.target.value)} placeholder="Dr. name or clinic" />
         </div>
-        <div className="chips" role="group" aria-label="Kind of visit">
-          {SPECIALTIES.map((s) => <Chip key={s} selected={specialty === s} onClick={() => setSpecialty(specialty === s ? undefined : s)}>{s}</Chip>)}
+        <div className="field">
+          <label htmlFor="av-email">Doctor email <span className="muted">(optional)</span></label>
+          <input id="av-email" type="email" className="input" autoComplete="off" value={email} placeholder="doctor@clinic.org"
+            onChange={(e) => { setEmail(e.target.value); setEmailError(false); }}
+            aria-invalid={emailError} aria-describedby={emailError ? 'av-email-err' : undefined} />
+          {emailError && <span id="av-email-err" className="form-error">Enter a valid email address, or leave it blank.</span>}
         </div>
+        <div className="field">
+          <label htmlFor="av-aff">Hospital or clinic affiliation <span className="muted">(optional)</span></label>
+          <input id="av-aff" className="input" value={affiliation} onChange={(e) => setAffiliation(e.target.value)} placeholder="e.g., Riverside Medical Center" />
+        </div>
+        <div className="field">
+          <label htmlFor="av-type">Type of doctor <span className="muted">(optional)</span></label>
+          <select id="av-type" className="select input" value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
+            <option value="">Choose one</option>
+            {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        {specialty === 'Other' && (
+          <div className="field">
+            <label htmlFor="av-type-other">What type of doctor?</label>
+            <input id="av-type-other" className="input" value={otherSpecialty} onChange={(e) => setOtherSpecialty(e.target.value)} placeholder="e.g., Neurologist" autoFocus />
+          </div>
+        )}
         <div className="field">
           <label htmlFor="av-why">What’s this visit for? <span className="muted">(optional)</span></label>
           <input id="av-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., follow-up on sleep and mood" />
