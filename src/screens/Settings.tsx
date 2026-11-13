@@ -5,6 +5,7 @@ import { ChipSelect, ConfirmButton, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
 import { todayISO } from '../lib/dates';
 import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
+import { startDemo } from '../lib/demoApi';
 import { isLinkActive, useApp } from '../lib/store';
 import { ShareLinkRow } from './Visits';
 
@@ -136,7 +137,7 @@ function ProfileSection() {
             className="btn btn--outline btn--sm"
             question="Replace everything on this device with demo data?"
             confirmLabel="Replace with demo"
-            onConfirm={() => { loadDemo(); navigate('/home'); }}
+            onConfirm={() => { void startDemo(loadDemo).then(() => navigate('/home')); }}
           >
             Load demo data
           </ConfirmButton>

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HeroArt } from '../components/Art';
 import { PublicLayout } from '../components/PublicLayout';
+import { startDemo } from '../lib/demoApi';
 import { useOnboarding } from '../lib/onboarding';
 import { useApp } from '../lib/store';
 
@@ -9,6 +11,7 @@ export function Landing() {
   const loadDemo = useApp((s) => s.loadDemo);
   const navigate = useNavigate();
   const resumeStep = useOnboarding((s) => s.step);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
   return (
     <PublicLayout>
@@ -51,9 +54,15 @@ export function Landing() {
         <button
           className="btn btn--link small"
           style={{ alignSelf: 'center', color: 'var(--ink-muted)' }}
-          onClick={() => { loadDemo(); navigate('/home'); }}
+          disabled={loadingDemo}
+          aria-busy={loadingDemo}
+          onClick={() => {
+            setLoadingDemo(true);
+            // Theo from the server (the team's live record); the built-in copy if it can't be reached.
+            void startDemo(loadDemo).then(() => navigate('/home'));
+          }}
         >
-          Explore with demo data (Theo, synthetic) →
+          {loadingDemo ? 'Loading Theo’s demo…' : 'Explore with demo data (Theo, synthetic) →'}
         </button>
       </main>
     </PublicLayout>

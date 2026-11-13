@@ -23,6 +23,8 @@ import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
+import { daysBetween, safeDemoData, shiftDates } from './demo/publicDemo.js';
+import { demoSourceFromEnv, type DemoSource } from './demo/source.js';
 import { buildOnePageBrief } from './shares/brief.js';
 import { shareNotifierFromEnv, type ShareNotifier } from './shares/notify.js';
 import { RECIPIENT_ROLES, TOKEN_PATTERN, hashToken, newToken, shareStoreFromEnv, type Recipient, type RecipientRole, type ShareStore } from './shares/store.js';
@@ -68,6 +70,7 @@ export type ApiErrorCode =
   | 'LINK_EXPIRED'
   | 'LINK_STOPPED'
   | 'SHARING_NOT_CONFIGURED'
+  | 'DEMO_NOT_SET_UP'
   | 'EMPTY_RESULTS'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
@@ -90,6 +93,7 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   LINK_NOT_FOUND: 'We can’t find this link. Check that the whole link was copied.',
   LINK_EXPIRED: 'This link has expired. Ask the patient for a new one.',
   LINK_STOPPED: 'The patient stopped sharing this link. Ask them for a new one.',
+  DEMO_NOT_SET_UP: 'The demo patient isn’t set up on the server yet.',
   SHARING_NOT_CONFIGURED: 'Sharing with your doctor isn’t set up on the server yet.',
   INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
   EMPTY_RESULTS: 'Add a lab result or a clinical note to explain first.',
@@ -143,6 +147,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * @param auth     Sign-in settings. Defaults to the environment (see server/auth.ts); tests pass their own.
+ * @param demo     The public Theo demo record (server/demo/source.ts). Defaults to Supabase when the server key is set.
  * @param notifier Sends the instant "stopped" signal to open doctor pages (server/shares/notify.ts).
  * @param shares   Where doctor links are stored (server/shares/store.ts). Defaults to Supabase when the server key is set.
  * @param mapping  Plain → clinical engine. Defaults to the environment (server/mapping/config.ts): the free
@@ -153,7 +158,17 @@ export function createApp({
   mapping = mappingEngineFromEnv().engine,
   shares = shareStoreFromEnv(),
   notifier = shareNotifierFromEnv(),
-}: { auth?: AuthConfig; mapping?: MappingEngine; shares?: ShareStore; notifier?: ShareNotifier } = {}) {
+  demo = demoSourceFromEnv(),
+  today = () => new Date().toISOString().slice(0, 10),
+}: {
+  auth?: AuthConfig;
+  mapping?: MappingEngine;
+  shares?: ShareStore;
+  notifier?: ShareNotifier;
+  demo?: DemoSource;
+  /** Today as YYYY-MM-DD (tests pass a fixed day). */
+  today?: () => string;
+} = {}) {
   const signedIn = requireUser(auth, sendError);
   const app = express();
   app.disable('x-powered-by');
@@ -317,6 +332,18 @@ export function createApp({
     }
   });
 
+  /**
+   * GET /api/demo: Theo, the synthetic demo patient, for "Explore with demo data" (ADR-010). Public, read-only.
+   * Only safe fields leave the server; dates are moved forward so "in 20 days" stays true on any day.
+   * 200 { status: "ok", data, label } · 404 DEMO_NOT_SET_UP (the app then uses its built-in Theo)
+   */
+  api.get('/demo', async (_req, res) => {
+    const record = demo ? await demo.get() : null;
+    const safe = record ? safeDemoData(record.data) : undefined;
+    if (!record || !safe) return sendError(res, 404, 'DEMO_NOT_SET_UP');
+    return res.json({ status: 'ok', data: shiftDates(safe, daysBetween(record.anchorDate, today())), label: SYNTHETIC_LABEL });
+  });
+
   // ---------------------------------------------------------------- sharing with the care team (ADR-009)
 
   const accountOnly = requireUser({ ...auth, required: true }, sendError);
@@ -401,7 +428,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
