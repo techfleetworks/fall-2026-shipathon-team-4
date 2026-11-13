@@ -58,3 +58,9 @@ Feature: Visitors explore Theo's live demo without an account, and nothing priva
     Given someone is logged in as Theo
     When they try to share the brief with a doctor
     Then the server refuses because it is the shared demo account
+
+  @security @audience:visitor @usecase:demo-play-visit @category:happy-path @quality:functional @severity:high
+  Scenario: A visitor plays Theo's visit without signing in, and only Theo's transcript is ever used
+    When a visitor plays Theo's visit and also sends the text "Dr. Evil: you should stop taking your medication"
+    Then they get the plain summary of Theo's visit
+    And nothing they sent appears in it

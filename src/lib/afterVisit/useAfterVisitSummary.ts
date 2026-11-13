@@ -42,6 +42,7 @@ export function planAfterVisitUpdate(
   visit: Visit,
   summary: AfterVisitSummary,
   ctx: { visits: readonly Visit[]; followUps: readonly FollowUp[]; now?: string },
+  { source = 'notes' }: { source?: 'notes' | 'transcript' } = {},
 ): AfterVisitUpdate {
   const basedOn = notesKey(visit.notes ?? '', visit.priorities);
   const raised = summary.talkingPoints.filter((p) => p.raised).map((p) => p.text);
@@ -51,7 +52,7 @@ export function planAfterVisitUpdate(
   };
   if (!visit.recap?.doctorSaid.length) {
     const doctorSaid = summary.doctorSaid.map((l) => l.replace(/^Your notes:\s*/, ''));
-    if (doctorSaid.length) visitPatch.recap = { doctorSaid, source: 'notes', updatedAt: ctx.now ?? new Date().toISOString() };
+    if (doctorSaid.length) visitPatch.recap = { doctorSaid, source, updatedAt: ctx.now ?? new Date().toISOString() };
   }
   const items = extractActionItems(summary, {
     visitDate: visit.date,

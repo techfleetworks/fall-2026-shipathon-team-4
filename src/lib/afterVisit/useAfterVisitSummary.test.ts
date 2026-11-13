@@ -63,7 +63,7 @@ describe('planAfterVisitUpdate: what gets saved', () => {
     expect(u.visitPatch.afterVisit?.basedOn).toBe(notesKey(v.notes!, v.priorities));
     expect(u.newFollowUps.map((f) => [f.step, f.owner, f.dueDate])).toEqual([
       ['Book a follow-up visit with Dr. Kim', 'You', '2026-12-08'],
-      ['Ask about Weight gain', 'You', '2026-12-08'],
+      ['Ask about weight gain', 'You', '2026-12-08'],
     ]);
     expect(u.newFollowUps.every((f) => f.visitId === 'v1' && f.reminder)).toBe(true);
   });
@@ -81,13 +81,13 @@ describe('planAfterVisitUpdate: what gets saved', () => {
   it('does not repeat next steps that are already saved', () => {
     const v = visit();
     const saved: FollowUp[] = [{ id: 'f', visitId: 'v1', step: 'Book a follow-up visit with Dr. Kim', dueDate: '2026-12-08', isVisit: true }];
-    expect(planAfterVisitUpdate(v, summaryFor(v), { visits: [v], followUps: saved }).newFollowUps.map((f) => f.step)).toEqual(['Ask about Weight gain']);
+    expect(planAfterVisitUpdate(v, summaryFor(v), { visits: [v], followUps: saved }).newFollowUps.map((f) => f.step)).toEqual(['Ask about weight gain']);
   });
 
   it('skips "book a follow-up" when one is already on the calendar', () => {
     const v = visit();
     const booked: Visit = { id: 'v2', date: '2026-12-05', clinician: 'Dr. Kim', priorities: [], askingFor: [] };
     const steps = planAfterVisitUpdate(v, summaryFor(v), { visits: [v, booked], followUps: [] }).newFollowUps;
-    expect(steps.map((f) => [f.step, f.dueDate])).toEqual([['Ask about Weight gain', '2026-12-05']]);
+    expect(steps.map((f) => [f.step, f.dueDate])).toEqual([['Ask about weight gain', '2026-12-05']]);
   });
 });
