@@ -16,6 +16,8 @@ import type { NextFunction, Request, Response } from 'express';
 export interface AuthUser {
   id: string;
   email?: string;
+  /** From app_metadata (only the server key can set it). 'public-demo' = Theo, the shared demo account (ADR-010). */
+  role?: string;
 }
 
 /** Returns the user for a valid access token, or null. Must not throw. */
@@ -38,7 +40,8 @@ const MAX_TOKEN_CHARS = 4096;
 export function authConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   const url = env.SUPABASE_URL;
   const anon = env.SUPABASE_ANON_KEY;
-  const service = env.SUPABASE_SERVICE_ROLE_KEY;
+  // Trimmed: a stray space pasted before the key would otherwise make every admin call fail.
+  const service = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   const verifyToken: TokenVerifier | undefined =
     url && anon
@@ -47,7 +50,9 @@ export function authConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AuthCon
           return async (token) => {
             try {
               const { data, error } = await client.auth.getUser(token);
-              return error || !data.user ? null : { id: data.user.id, email: data.user.email ?? undefined };
+              if (error || !data.user) return null;
+              const role = data.user.app_metadata?.role;
+              return { id: data.user.id, email: data.user.email ?? undefined, ...(typeof role === 'string' ? { role } : {}) };
             } catch {
               return null;
             }

@@ -5,6 +5,7 @@ import { ChipSelect, ConfirmButton, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
 import { todayISO } from '../lib/dates';
 import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
+import { startDemo } from '../lib/demoApi';
 import { isLinkActive, useApp } from '../lib/store';
 import { ShareLinkRow } from './Visits';
 
@@ -30,7 +31,10 @@ export function Settings() {
 
   const logOut = () => {
     void serverLogOut(); // ends the session on the sign-in server too (no-op if it isn't set up)
-    signOut();
+    // Demo (Theo, synthetic): clear it from this device, so the next person starts clean. Theo's record stays on
+    // the server and comes back on his next log-in. Real users keep their data on the device, as before.
+    if (useApp.getState().demoMode) useApp.getState().deleteEverything();
+    else signOut();
     navigate('/', { replace: true });
   };
 
@@ -136,7 +140,7 @@ function ProfileSection() {
             className="btn btn--outline btn--sm"
             question="Replace everything on this device with demo data?"
             confirmLabel="Replace with demo"
-            onConfirm={() => { loadDemo(); navigate('/home'); }}
+            onConfirm={() => { void startDemo(loadDemo).then(() => navigate('/home')); }}
           >
             Load demo data
           </ConfirmButton>
