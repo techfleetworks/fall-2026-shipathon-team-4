@@ -15,6 +15,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { APP_NAME } from '../src/lib/brand.js';
 import { CRISIS_DETECTED_RESOURCES, DISCLAIMERS, crisisMessageText } from '../src/lib/guardrails/copy.js';
+import { MAX_EXPLAIN_CHARS, explainClinical } from '../src/lib/explain/explain.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
@@ -48,6 +49,9 @@ export type ApiErrorCode =
   | 'INVALID_INPUT'
   | 'INVALID_STORY'
   | 'EMPTY_STORY'
+  | 'INVALID_TEXT'
+  | 'EMPTY_TEXT'
+  | 'TEXT_TOO_LONG'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
   | 'UNSUPPORTED_MEDIA_TYPE'
@@ -61,6 +65,9 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   INVALID_INPUT: 'Send a JSON object like { "transcript": "...", "source": "paste" }.',
   INVALID_STORY: 'Send a JSON object like { "draft": { "opening": "..." } } using the app’s answer choices.',
   EMPTY_STORY: 'Tell us a little about what’s been happening first.',
+  INVALID_TEXT: 'Send a JSON object like { "text": "..." }.',
+  EMPTY_TEXT: 'Paste the words you’d like explained first.',
+  TEXT_TOO_LONG: `That’s more than we can explain at once (limit ${MAX_EXPLAIN_CHARS.toLocaleString('en-US')} characters).`,
   MALFORMED_JSON: 'The request body is not valid JSON.',
   PAYLOAD_TOO_LARGE: `The request body is too large (limit ${MAX_BODY}).`,
   UNSUPPORTED_MEDIA_TYPE: 'Send the request body as JSON (Content-Type: application/json).',
@@ -198,6 +205,32 @@ export function createApp({
   });
 
   /**
+   * POST /api/explain: clinical → plain. Finds clinical terms and note shorthand ("somnolence", "5/52",
+   * "?orthostatic hypotension") and returns the vetted plain explanation for each (ADR-007). Free: no AI.
+   * Body: { "text": string }  (a clinical note, what the doctor said, or the app's doctor-terms lines)
+   * 200 { status: "ok", explanations: [{ id, term, kind, found, plain }], disclaimer } (empty list: nothing to explain)
+   * 200 { status: "crisis", help } · 200 { status: "blocked", message, rules } · 400 · 415. Nothing is stored or logged.
+   */
+  api.post('/explain', signedIn, (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body) || typeof body.text !== 'string') return sendError(res, 400, 'INVALID_TEXT');
+    const text = body.text;
+    if (!text.trim()) return sendError(res, 400, 'EMPTY_TEXT');
+    if (text.length > MAX_EXPLAIN_CHARS) return sendError(res, 400, 'TEXT_TOO_LONG');
+
+    const outcome = explainClinical(text);
+    switch (outcome.status) {
+      case 'crisis':
+        return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+      case 'blocked':
+        return res.status(200).json({ status: 'blocked', message: outcome.message, rules: [...new Set(outcome.violations.map((v) => v.rule))] });
+      case 'ok':
+        return res.status(200).json({ status: 'ok', explanations: outcome.explanations, disclaimer: DISCLAIMERS.short.body });
+    }
+  });
+
+  /**
    * DELETE /api/account: permanently deletes the signed-in user's account on the sign-in server. Their database
    * rows go with it (ON DELETE CASCADE). The app then wipes the device. Copy promise: "deleted whenever you ask".
    * 204 deleted · 401 not signed in · 503 sign-in or the admin key isn't configured · 500 the delete failed
@@ -210,7 +243,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
