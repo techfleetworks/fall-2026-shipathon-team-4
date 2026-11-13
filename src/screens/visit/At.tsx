@@ -5,6 +5,8 @@ import { Checkbox } from '../../components/ui';
 import { SCRIPTS } from '../../data/scripts';
 import { APP_NAME } from '../../lib/brand';
 import { buildBriefSnapshot } from '../../lib/brief';
+import { planAfterVisitUpdate } from '../../lib/afterVisit/useAfterVisitSummary';
+import { playDemoVisit } from '../../lib/demoApi';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { useApp } from '../../lib/store';
 import { DoctorBriefBody } from '../Brief';
@@ -18,6 +20,7 @@ export function AtVisit() {
   const visit = useVisitParam();
   const updateVisit = useApp((s) => s.updateVisit);
   const savedScripts = useApp((s) => s.savedScripts);
+  const demoMode = useApp((s) => s.demoMode);
   const [iAgree, setIAgree] = useState(false);
   const [docAgrees, setDocAgrees] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -93,6 +96,8 @@ export function AtVisit() {
               <p style={{ margin: 0 }}>You haven’t covered “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
             </section>
           )}
+          {/* Demo only (ADR-015): play Theo's sample visit as if it had been recorded, then see the After step fill in. */}
+          {demoMode && <PlayTheosVisit visitId={visit.id} />}
           <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline">Visit’s over — go to recap</Link>
         </div>
 
@@ -203,6 +208,44 @@ function CaptureBar({ running, setRunning, onStop }: { running: boolean; setRunn
       <button className="btn btn--outline btn--sm" onClick={() => setPaused(!paused)}>{paused ? 'Resume' : 'Pause'}</button>
       <button className="btn btn--danger btn--sm" onClick={stop}>Stop</button>
     </div>
+  );
+}
+
+/** Demo only: "Play Theo's visit" loads the synthetic transcript as if this visit was recorded. Never shown to real users. */
+function PlayTheosVisit({ visitId }: { visitId: string }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const play = async () => {
+    setBusy(true);
+    setMessage(null);
+    const state = useApp.getState();
+    const visit = state.visits.find((v) => v.id === visitId);
+    const summary = visit ? await playDemoVisit(visit.priorities) : undefined;
+    setBusy(false);
+    if (!visit || !summary) return setMessage('We couldn’t reach the server to play the sample visit. Please try again.');
+    const fresh = useApp.getState();
+    const current = fresh.visits.find((v) => v.id === visitId) ?? visit;
+    const { visitPatch, newFollowUps } = planAfterVisitUpdate(
+      { ...current, recap: undefined },
+      summary,
+      { visits: fresh.visits, followUps: fresh.followUps },
+      { source: 'transcript' },
+    );
+    fresh.updateVisit(visitId, { ...visitPatch, recording: 'agreed' });
+    for (const f of newFollowUps) fresh.addFollowUp(f);
+    navigate(`/visits/${visitId}/after`);
+  };
+  return (
+    <section className="panel panel--muted">
+      <span className="eyebrow-soft">Demo</span>
+      <p style={{ margin: 0 }}>See what happens after a visit: play Theo’s visit with Dr. Lane as if it was recorded.</p>
+      <button className="btn btn--primary btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => void play()} disabled={busy} aria-busy={busy}>
+        {busy ? 'Playing Theo’s visit…' : '▶ Play Theo’s visit (sample recording)'}
+      </button>
+      {message && <p className="small" role="alert" style={{ margin: 0 }}>{message}</p>}
+      <span className="small muted">Synthetic — illustrative only, not medical advice.</span>
+    </section>
   );
 }
 

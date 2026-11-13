@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HeroArt } from '../components/Art';
 import { PublicLayout } from '../components/PublicLayout';
+import { startDemo } from '../lib/demoApi';
+import { SITE } from '../lib/siteMode';
 import { useOnboarding } from '../lib/onboarding';
 import { useApp } from '../lib/store';
 
@@ -9,6 +12,7 @@ export function Landing() {
   const loadDemo = useApp((s) => s.loadDemo);
   const navigate = useNavigate();
   const resumeStep = useOnboarding((s) => s.step);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
   return (
     <PublicLayout>
@@ -48,13 +52,39 @@ export function Landing() {
           </div>
         </section>
 
+        {/* Demo site (ADR-016): Theo's login, shown on purpose so visitors can log in and out as Theo. */}
+        {SITE.mode === 'demo' && SITE.demoLogin && (
+          <section className="pcard pcard--muted" aria-labelledby="try-theo" style={{ alignSelf: 'center', maxWidth: 520 }}>
+            <span className="eyebrow">Try it as Theo</span>
+            <p id="try-theo" style={{ margin: 0 }}>Log in as Theo, a made-up patient, to see how the app works with real-looking information.</p>
+            <p className="small" style={{ margin: 0 }}>
+              Email: <strong>{SITE.demoLogin.email}</strong><br />Password: <strong>{SITE.demoLogin.password}</strong>
+            </p>
+            <Link className="btn btn--primary btn--sm" style={{ alignSelf: 'flex-start' }} to="/login?as=theo">Log in as Theo</Link>
+            <span className="small muted">Synthetic — illustrative only, not medical advice.</span>
+          </section>
+        )}
+
+        {/* Real users' site (ADR-016): the demo lives on its own site, so a real user's data is never touched. */}
+        {SITE.mode === 'live' && SITE.demoUrl ? (
+          <a className="btn btn--link small" style={{ alignSelf: 'center', color: 'var(--ink-muted)' }} href={SITE.demoUrl} target="_blank" rel="noopener noreferrer">
+            Explore the demo (Theo, synthetic) ↗
+          </a>
+        ) : (
         <button
           className="btn btn--link small"
           style={{ alignSelf: 'center', color: 'var(--ink-muted)' }}
-          onClick={() => { loadDemo(); navigate('/home'); }}
+          disabled={loadingDemo}
+          aria-busy={loadingDemo}
+          onClick={() => {
+            setLoadingDemo(true);
+            // Theo from the server (the team's live record); the built-in copy if it can't be reached.
+            void startDemo(loadDemo).then(() => navigate('/home'));
+          }}
         >
-          Explore with demo data (Theo, synthetic) →
+          {loadingDemo ? 'Loading Theo’s demo…' : 'Explore with demo data (Theo, synthetic) →'}
         </button>
+        )}
       </main>
     </PublicLayout>
   );

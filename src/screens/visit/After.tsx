@@ -5,6 +5,7 @@ import { SCRIPTS } from '../../data/scripts';
 import { addDays, daysUntil, formatShort, todayISO } from '../../lib/dates';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { shareText } from '../../lib/share';
+import { useAfterVisitSummary } from '../../lib/afterVisit/useAfterVisitSummary';
 import { useApp } from '../../lib/store';
 import type { Answer3, CheckIn, FollowUp } from '../../lib/types';
 import { useVisitParam, VisitLayout } from './common';
@@ -15,6 +16,8 @@ import { useVisitParam, VisitLayout } from './common';
 
 export function RecapStep() {
   const visit = useVisitParam();
+  // Real users: summarize this visit's quick notes in plain words and add the action items (ADR-011, ADR-013).
+  useAfterVisitSummary(visit);
   const navigate = useNavigate();
   const updateVisit = useApp((s) => s.updateVisit);
   const [editing, setEditing] = useState(false);
@@ -159,6 +162,7 @@ function dueLabel(f: FollowUp) {
 
 export function NextStepsStep() {
   const visit = useVisitParam();
+  useAfterVisitSummary(visit);
   const navigate = useNavigate();
   const state = useApp();
   const [what, setWhat] = useState('');
