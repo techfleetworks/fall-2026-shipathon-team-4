@@ -21,6 +21,7 @@ import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { summarizeVisit } from '../src/lib/afterVisit/summary.js';
+import { extractActionItems } from '../src/lib/afterVisit/actionItems.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig, type AuthUser } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
@@ -285,6 +286,8 @@ export function createApp({
     return res.status(200).json({
       status: 'ok',
       summary: after.status === 'ok' ? after.summary : null,
+      // Action items (ADR-013), dated from today: the visit just happened.
+      actionItems: after.status === 'ok' ? extractActionItems(after.summary, { visitDate: new Date().toISOString().slice(0, 10), clinician: clinicianSpeakers(payload, patientName)[0] }) : [],
       doctorSaid: doctorSaidFrom(payload, patientName),
       clinicians: clinicianSpeakers(payload, patientName),
       dialogueTurns: payload.stats.dialogueTurns,
