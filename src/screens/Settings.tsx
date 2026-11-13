@@ -6,6 +6,7 @@ import { APP_NAME } from '../lib/brand';
 import { todayISO } from '../lib/dates';
 import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
 import { startDemo } from '../lib/demoApi';
+import { SITE } from '../lib/siteMode';
 import { isLinkActive, useApp } from '../lib/store';
 import { ShareLinkRow } from './Visits';
 
@@ -134,6 +135,14 @@ function ProfileSection() {
 
       <section className="pcard pcard--muted">
         <h2>Demo</h2>
+        {SITE.mode === 'live' && SITE.demoUrl ? (
+          <>
+            {/* Real users' site (ADR-016): the demo is its own site, so your data here is never replaced. */}
+            <p className="small">See the app with Theo’s synthetic example, on the demo site. Your own information here isn’t touched.</p>
+            <a className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }} href={SITE.demoUrl} target="_blank" rel="noopener noreferrer">Open the demo ↗</a>
+          </>
+        ) : (
+        <>
         <p className="small">Replace your data with Theo’s synthetic example to explore the full flow.</p>
         <div style={{ alignSelf: 'flex-start' }}>
           <ConfirmButton
@@ -145,6 +154,8 @@ function ProfileSection() {
             Load demo data
           </ConfirmButton>
         </div>
+        </>
+        )}
       </section>
       {toast}
     </>

@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
 import { fetchMyAppData } from '../../lib/demoApi';
+import { SITE } from '../../lib/siteMode';
 import { selectHasAccount, useApp } from '../../lib/store';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,8 +26,11 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const [busy, setBusy] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Demo site: "Log in as Theo" on the start page fills in his login (ADR-016, team option A).
+  const [params] = useSearchParams();
+  const theo = SITE.mode === 'demo' && params.get('as') === 'theo' ? SITE.demoLogin : undefined;
+  const [email, setEmail] = useState(theo?.email ?? '');
+  const [password, setPassword] = useState(theo?.password ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const switchTo = (m: 'signup' | 'login') => {
