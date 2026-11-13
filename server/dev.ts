@@ -5,9 +5,13 @@
  */
 import { APP_NAME } from '../src/lib/brand.js';
 import { createApp } from './app.js';
+import { mappingEngineFromEnv } from './mapping/config.js';
 
 const port = Number(process.env.PORT ?? 3001);
 
-createApp().listen(port, () => {
+const { engine, note } = mappingEngineFromEnv();
+
+createApp({ mapping: engine }).listen(port, () => {
   console.log(`${APP_NAME} API running at http://localhost:${port}/api/health`);
+  console.log(note);
 });

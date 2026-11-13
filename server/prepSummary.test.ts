@@ -6,6 +6,7 @@ import { BLOCKED_FALLBACK } from '../src/lib/guardrails/copy.js';
 import type { StoryDraft } from '../src/lib/types.js';
 import { CRISIS_HELP, createApp } from './app.js';
 import { MAX_ANSWER_CHARS, parseStoryDraft } from './storyDraft.js';
+import { standInEngine } from './mapping/standIn.js';
 
 const app = createApp();
 
@@ -29,6 +30,36 @@ describe('POST /api/prep-summary', () => {
     expect(byKey.symptoms).toContain('Over-sedation');
     expect(byKey.tried).toContain('Ziprasidone 40 mg');
     expect(res.body.disclaimer).toBe('Not a diagnosis or medical advice — a tool to help you be heard.');
+  });
+
+  it('says which engine answered: the free rules engine by default', async () => {
+    const res = await post({ draft: theoDraft() });
+    expect(res.body.engine).toBe('rules');
+  });
+
+  it('uses the AI engine’s validated terms when one is configured (stand-in, no network)', async () => {
+    const aiApp = createApp({
+      mapping: standInEngine(() => ({
+        crisis_language: false,
+        symptoms: [{ term: 'Anhedonia (loss of interest or pleasure)', patient_quote: 'not even my hobbies' }],
+      })),
+    });
+    const d = theoDraft();
+    d.opening = 'Nothing makes me happy anymore, not even my hobbies';
+    const res = await request(aiApp).post('/api/prep-summary').send({ draft: d });
+    expect(res.status).toBe(200);
+    expect(res.body.engine).toBe('claude');
+    expect(res.body.fields.find((f: { key: string }) => f.key === 'symptoms').clinical).toContain('Anhedonia');
+  });
+
+  it('falls back to the rules answer, not an error, when the AI engine misbehaves', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const aiApp = createApp({ mapping: standInEngine(() => { throw new Error('down'); }) });
+    const res = await request(aiApp).post('/api/prep-summary').send({ draft: theoDraft() });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'ok', engine: 'rules' });
+    expect(res.body).not.toHaveProperty('fallback');
+    vi.restoreAllMocks();
   });
 
   it('routes crisis language to the crisis response, with no summary', async () => {
