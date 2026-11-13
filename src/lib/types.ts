@@ -130,6 +130,8 @@ export interface Visit {
   notes?: string;
   /** F1: recap in plain words. */
   recap?: { doctorSaid: string[]; source: 'recording' | 'notes' | 'transcript'; updatedAt: string };
+  /** Plain-language after-visit summary from the transcript or notes (ADR-011): raised / said / plan / not covered. */
+  afterVisit?: import('./afterVisit/summary').AfterVisitSummary;
   checkIn?: CheckIn;
 }
 

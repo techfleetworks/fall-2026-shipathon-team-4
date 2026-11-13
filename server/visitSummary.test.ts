@@ -67,3 +67,37 @@ describe('POST /api/visit-summary', () => {
     expect(out).toMatchObject({ status: 'ok', clinicians: ['Dr. Lane'] });
   });
 });
+
+describe('POST /api/visit-summary: plain-language after-visit summary (ADR-011)', () => {
+  it('returns the summary alongside the existing fields', async () => {
+    const res = await post({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', patientName: 'Theo', talkingPoints: ['Daytime sleepiness since the dose change'] });
+    expect(res.status).toBe(200);
+    expect(res.body.summary.plan).toContain('Check again next month.');
+    expect(res.body.summary.notCovered).toContain('The doctor did not talk about feeling dizzy when you stand up.');
+    expect(res.body.summary.talkingPoints).toEqual([{ text: 'Daytime sleepiness since the dose change', raised: true }]);
+    expect(res.body.summary.meetsReadingTarget).toBe(true);
+    expect(res.body.doctorSaid).toHaveLength(3); // unchanged: the exact quotes are still there
+  });
+
+  it.each([
+    ['talking points that are not a list', { talkingPoints: 'sleepiness' }],
+    ['more than 3 talking points', { talkingPoints: ['a', 'b', 'c', 'd'] }],
+    ['a talking point that is not text', { talkingPoints: [42] }],
+  ])('rejects %s (400)', async (_name, extra) => {
+    const res = await post({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', ...extra });
+    expect(res.status).toBe(400);
+  });
+
+  it('routes crisis language in a talking point to crisis support', async () => {
+    const res = await post({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', talkingPoints: ['I want to hurt myself'] });
+    expect(res.body).toEqual({ status: 'crisis', help: CRISIS_HELP });
+  });
+});
+
+describe('POST /api/visit-summary: action items (ADR-013)', () => {
+  it('returns action items from the transcript', async () => {
+    const res = await post({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', patientName: 'Theo' });
+    expect(res.body.actionItems.map((i: { step: string }) => i.step)).toEqual(['Book a follow-up visit with Dr. Lane', 'Ask about feeling dizzy when you stand up']);
+    expect(res.body.actionItems[0]).toMatchObject({ owner: 'You', isVisit: true });
+  });
+});
