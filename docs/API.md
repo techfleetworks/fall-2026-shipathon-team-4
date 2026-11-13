@@ -163,6 +163,84 @@ lines from the clinician's. Without it, speakers named "Dr. …", "Nurse …" et
 `200 { status: "ok", doctorSaid, clinicians, dialogueTurns, disclaimer }` · `200 { status: "crisis", help }` · `400` · `415`.
 Store the lines with `source: 'transcript'` (the Recap pill then reads "★ From your transcript").
 
+## 2c. Clinical → plain: `POST /api/explain` (new, ADR-007)
+
+Explains clinical words and note shorthand in plain language, from a reviewed glossary (no AI, free).
+Works on a clinical note, what the doctor said, or the app's own doctor-terms lines.
+
+```ts
+import { requestExplanation } from '../../lib/api';
+
+const out = await requestExplanation('?orthostatic hypotension, RV in 4/52');
+if (out.status === 'ok') out.explanations; // [{ found: '?', plain: 'Query (or a "?" …)…' }, { found: 'orthostatic hypotension', plain: 'Blood pressure that drops…' }, …]
+```
+
+Each explanation is `{ id, term, kind: 'term' | 'shorthand', found, plain }`, in reading order. An empty list
+means there was nothing to explain. Other statuses: `crisis` (go to crisis support), `blocked` (show `message`),
+`rejected` (`EMPTY_TEXT`, `TEXT_TOO_LONG` over 20,000 characters, `INVALID_TEXT`), `unavailable`.
+No server needed for tooltips: `explainClinical(text)` from `src/lib/explain/explain.ts` gives the same answer on the device.
+Placement is yours, e.g. a "What this means" link under each doctor-terms line.
+
+## 2d. Labs & notes → plain: `POST /api/explain-results` (new, ADR-008)
+
+Lab results placed against the range printed on the report, plus the clinical-note terms (§2c), in one call. Free, no AI.
+
+```ts
+import { requestResultsExplanation } from '../../lib/api';
+import { THEO_CLINICAL_NOTE, THEO_LABS } from '../../data/sampleResults';   // demo data (synthetic)
+
+const out = await requestResultsExplanation({ labs: [...THEO_LABS], note: THEO_CLINICAL_NOTE });
+if (out.status === 'ok') {
+  out.labs;      // [{ test, value, typicalRange?, position: 'above'|'within'|'below'|'change'|'no-range'|'not-compared', summary, about? }]
+  out.note;      // same shape as /api/explain
+  out.labsNote;  // "Typical ranges differ between labs…": show once near the labs
+}
+```
+
+Example: `{ test: 'Fasting glucose', value: '104 mg/dL', position: 'above', summary: '104 mg/dL is above the typical range shown (70-99).', about: 'Blood sugar measured after not eating, usually overnight.' }`.
+It never says what a result means for the person, by design. Other statuses: `crisis`, `blocked`, `rejected`
+(`EMPTY_RESULTS`, `INVALID_RESULTS`, `TEXT_TOO_LONG`), `unavailable`. For a CSV upload, `parseLabsCsv(text)` from
+`src/lib/labs/labs.ts` turns a labs.csv-style file into rows (other columns are ignored).
+
+## 2e. Share the one-page brief with the care team (new, ADR-009)
+
+One expiring link **per person** (PCP, therapist, psychiatrist…). The doctor opens it on any device without signing in.
+The patient can stop one person without affecting the others. Needs sign-in and the Supabase step in
+`docs/SUPABASE_SETUP.md` §8.
+
+```ts
+import { createShare, listShares, shareStatus, stopShare, stopAllShares } from '../../lib/sharesApi';
+import { shareEmailDraft } from '../../lib/shareEmail';
+import { buildBriefSnapshot } from '../../lib/brief';
+
+const out = await createShare({
+  brief: buildBriefSnapshot(state, visit, { talkingPoints, summary }),
+  recipient: { name: 'Dr. Lane', role: 'Primary care', email: 'lane@clinic.example', clinic: 'Riverside Clinic' },
+  days: 7,                                     // 1–30 (your 24 h / 7 days / 30 days picker)
+});
+if (out.status === 'ok') {
+  const email = shareEmailDraft({ recipient: out.share.recipient, url: out.url, expiresAt: out.share.expiresAt, patientName: profile.name });
+  window.location.href = email.mailto;          // opens the patient's own email app, ready to send
+  // out.url is shown ONCE (only a hash is stored): offer "Copy link" too. out.trimmed → "Shortened to fit one page."
+}
+// 'crisis' → crisis support (nothing shared) · 'rejected' → out.error.message · 'unavailable' → try again
+
+const list = await listShares();               // "Shared with": one row per person
+list.status === 'ok' && list.shares.map((s) => [s.recipient.name, s.recipient.role, shareStatus(s)]);  // active | expired | stopped
+await stopShare(id);                           // stop ONE person
+await stopAllShares();                         // stop everyone
+```
+
+Roles: `Primary care`, `Therapist`, `Psychiatrist`, `Specialist`, `Other`. The **email holds only the link and its end date**,
+never health details. `/shared/:token` already asks the server for links made on other devices, and an open doctor page clears **within about a
+second** when the patient stops sharing (Supabase Realtime signal; 30-second re-check as backup). Nothing to build on your side.
+
+**For your screens (from the team notes):**
+- A "Shared with" list, one row per person with its own **Stop sharing** button. **Stop all** is optional.
+- Care-team fields: name, role, work email, hospital/clinic.
+- Deleting the account stops every share (the database deletes them). Say so in the delete dialog, and consider
+  the **type DELETE to confirm** pattern there.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
