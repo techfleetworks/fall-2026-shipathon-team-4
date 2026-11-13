@@ -39,15 +39,18 @@ const DOCS: Record<string, Doc> = {
   },
   privacy: {
     title: 'Privacy policy',
-    short: 'We never sell your data. You can export or delete it anytime.',
+    short: 'We never sell your data, run ads, or use it to train AI. You control who sees what, and you can delete it anytime.',
     sections: [
       {
         h: 'What we collect',
         body: (
           <ul>
-            <li>What you choose to enter: your story, visit details, medications, check-ins and saved scripts.</li>
-            <li>Raw voice input is turned into text by your browser and is never stored by us.</li>
-            <li>Stories in progress are discarded when you close the tab unless you save them.</li>
+            <li>Your email, to sign in.</li>
+            <li>What you type or say before a visit — your notes and how you’re feeling — used to build your summary.</li>
+            <li>If you record a visit, the audio is deleted as soon as it’s transcribed; we don’t keep raw audio.</li>
+            <li>Transcripts are kept only long enough to make and let you review your summary, then auto-deleted.</li>
+            <li>Your summaries and visit history, kept until you delete them.</li>
+            <li>Basic app and device info needed to keep the app working.</li>
           </ul>
         ),
       },
@@ -55,9 +58,11 @@ const DOCS: Record<string, Doc> = {
         h: 'Who we share it with',
         body: (
           <ul>
-            <li>No one, unless you share it yourself — for example by showing your brief or sending it to your doctor.</li>
-            <li>We never sell your data, show ads, or share it with advertisers or your insurer or employer.</li>
-            <li>We don’t use what you share to train AI models.</li>
+            <li>No one, by default — your information isn’t visible to anyone else unless you choose to share it.</li>
+            <li>When you choose: show your summary in the room, or send your doctor a link that expires. You can stop sharing anytime.</li>
+            <li>Our AI provider processes your words to create your summary, under contract not to train its models on your data.</li>
+            <li>We never sell your data, run ads, or give it to advertisers.</li>
+            <li>We never share your individual health conversations with a payer — or anyone — without your explicit consent.</li>
           </ul>
         ),
       },

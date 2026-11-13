@@ -13,11 +13,17 @@ export function buildBriefSnapshot(
   const visit = forVisit ?? selectUpcomingVisit(s);
   const field = (k: string) => latest?.fields.find((f) => f.key === k);
   const tried = field('tried');
+  const severity = field('severity');
+  const impact = severity && severity.clinical !== 'Not discussed'
+    ? /affects daily function \(([^)]+)\)/i.exec(severity.clinical)?.[1]
+    : undefined;
   return {
     includeTalkingPoints: include.talkingPoints,
     includeSummary: include.summary,
     who: [[s.profile?.name, s.profile?.age].filter(Boolean).join(', '), visit && `Visit ${formatShort(visit.date)}`].filter(Boolean).join(' · '),
     visitDate: visit?.date,
+    patient: [s.profile?.name, s.profile?.age].filter(Boolean).join(', ') || undefined,
+    impact: include.summary && impact ? impact.charAt(0).toUpperCase() + impact.slice(1) : undefined,
     priorities: include.talkingPoints ? (visit?.priorities ?? []) : [],
     symptoms: !include.summary ? [] : ['symptoms', 'onset', 'frequency', 'severity', 'triggers']
       .map(field)

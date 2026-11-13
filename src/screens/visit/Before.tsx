@@ -22,7 +22,7 @@ import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
 import type { FieldKey, StoryDraft, Visit } from '../../lib/types';
 import { Priorities, suggestionsFrom } from '../Brief';
 import { ShareLinkRow, linkUrl } from '../Visits';
-import { formatTime, Modal, useVisitParam, VisitLayout } from './common';
+import { formatTime, Modal, prepFeelings, useVisitParam, VisitLayout } from './common';
 
 /* ======================================================================
    B1 · Name how I feel + see it in doctor terms + edit (side by side)
@@ -159,9 +159,13 @@ export function NameHowIFeel() {
             </>
           )}
 
+          {/* Always shown, on every browser and device. Where speech input isn't available yet,
+              the button just moves the cursor to the text box. */}
           <div className="talk-row">
-            {supported && <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>}
-            <span className="muted">{supported ? (listening ? 'Release to stop' : 'Hold to talk, or type') : 'Type it in your own words'}</span>
+            {supported
+              ? <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>
+              : <button type="button" className="talk" onClick={() => document.getElementById('say')?.focus()}>Talk</button>}
+            <span className="muted">{listening ? 'Release to stop' : 'Hold to talk, or type'}</span>
           </div>
           <label htmlFor="say" className="sr-only">Your words</label>
           <textarea id="say" className="textarea" value={text} onChange={(e) => update(withText(draft, q, e.target.value))}
@@ -509,7 +513,14 @@ export function TalkingPointsStep() {
    B5 · Prep — feeling, editable checklist, breathing
    ====================================================================== */
 
-const FEELINGS = ['Calm', 'Nervous', 'Overwhelmed', 'Hopeful', 'Frustrated', 'Scared'];
+/** Shown first: the most common pre-visit feelings. */
+const FEELINGS = ['Calm', 'Hopeful', 'Nervous', 'Anxious', 'Overwhelmed', 'Tired', 'Frustrated', 'Scared'];
+/** Behind "More feelings", in plain everyday words. */
+const MORE_FEELINGS: { group: string; options: string[] }[] = [
+  { group: 'Uneasy', options: ['Restless', 'On edge', 'Worried', 'Dreading it'] },
+  { group: 'Low', options: ['Sad', 'Numb', 'Flat', 'Hopeless'] },
+  { group: 'Steady', options: ['Ready', 'Relieved', 'Determined', 'Okay'] },
+];
 const DEFAULT_CHECKS = ['Read my top 3 talking points', 'Pick one playbook to keep handy', 'Bring ID, med list, phone charged'];
 
 export function PrepStep() {
@@ -518,8 +529,13 @@ export function PrepStep() {
   const updateVisit = useApp((s) => s.updateVisit);
   const [adding, setAdding] = useState(false);
   const [newItem, setNewItem] = useState('');
+  // Open "More feelings" when a saved feeling lives there, so the selection is visible.
+  const [moreOpen, setMoreOpen] = useState(() => prepFeelings(visit?.prep).some((f) => !FEELINGS.includes(f)));
   if (!visit) return <Navigate to="/visits" replace />;
   const prep = visit.prep ?? { checks: [], extra: [] };
+  const feelings = prepFeelings(prep);
+  // Store the list; drop the old single value so the two never disagree.
+  const setFeelings = (next: string[]) => set({ feelings: next, feeling: undefined });
   const set = (patch: Partial<typeof prep>) => updateVisit(visit.id, { prep: { ...prep, ...patch } });
   const items = [...DEFAULT_CHECKS, ...prep.extra];
   const when = visit.date === todayISO() ? `Today${visit.time ? `, ${formatTime(visit.time)}` : ''}` : visit.time ? formatTime(visit.time) : undefined;
@@ -539,9 +555,20 @@ export function PrepStep() {
       <p className="muted" style={{ marginTop: -6 }}>Three small things before you go. Skip any.</p>
       <section className="panel">
         <span className="eyebrow-soft">How are you feeling right now?</span>
-        <ChipSelect label="How are you feeling" options={FEELINGS} value={prep.feeling} onChange={(feeling) => set({ feeling })} />
-        {(prep.feeling === 'Overwhelmed' || prep.feeling === 'Scared') && (
-          <p className="small" style={{ margin: 0 }}>That makes sense. Try the breathing, and remember you can hand your phone to the doctor instead of saying it all.</p>
+        <span className="small muted" style={{ marginTop: -4 }}>Pick any that fit.</span>
+        <ChipMulti label="How are you feeling" options={FEELINGS} value={feelings} onChange={setFeelings} />
+        <button type="button" className="link-btn feelings-more-btn" aria-expanded={moreOpen} aria-controls="more-feelings" onClick={() => setMoreOpen((o) => !o)}>
+          {moreOpen ? 'Fewer feelings' : 'More feelings'} <span aria-hidden="true">{moreOpen ? '▴' : '▾'}</span>
+        </button>
+        {moreOpen && (
+          <div id="more-feelings" className="feelings-more">
+            {MORE_FEELINGS.map(({ group, options }) => (
+              <div key={group} className="feelings-more__group">
+                <span className="small muted">{group}</span>
+                <ChipMulti label={`${group} feelings`} options={options} value={feelings} onChange={setFeelings} />
+              </div>
+            ))}
+          </div>
         )}
       </section>
       <div className="b5-grid">

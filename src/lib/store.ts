@@ -57,7 +57,7 @@ interface AppActions {
   deleteEvidence: (id: string) => void;
   addMedication: (m: Omit<Medication, 'id'>) => void;
   deleteMedication: (id: string) => void;
-  addVisit: (v: { date: string; time?: string; clinician?: string; specialty?: string; reason?: string }) => string;
+  addVisit: (v: { date: string; time?: string; clinician?: string; clinicianEmail?: string; affiliation?: string; specialty?: string; reason?: string }) => string;
   addFollowUp: (f: Omit<FollowUp, 'id'>) => void;
   updateFollowUp: (id: string, patch: Partial<FollowUp>) => void;
   deleteFollowUp: (id: string) => void;

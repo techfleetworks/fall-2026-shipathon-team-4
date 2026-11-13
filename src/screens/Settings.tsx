@@ -7,12 +7,13 @@ import { todayISO } from '../lib/dates';
 import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
 import { isLinkActive, useApp } from '../lib/store';
 import { ShareLinkRow } from './Visits';
+import { dataAsCsv } from '../lib/exportCsv';
 
 const SECTIONS = [
   { slug: 'profile', label: 'Profile' },
   { slug: 'privacy', label: 'Privacy and data' },
   { slug: 'notifications', label: 'Notifications' },
-  { slug: 'install', label: 'Install the app' },
+  { slug: 'install', label: 'Save to Homescreen' },
 ] as const;
 type Slug = (typeof SECTIONS)[number]['slug'];
 
@@ -174,13 +175,14 @@ function PrivacySection() {
     const { profile, medications, summaries, evidence, visits, followUps, savedScripts, sharedTips, myPlaybooks } = useApp.getState();
     // Never export the password hash.
     const safeProfile = profile ? { ...profile, passwordHash: undefined } : null;
-    const blob = new Blob(
-      [JSON.stringify({ exportedAt: new Date().toISOString(), app: APP_NAME, profile: safeProfile, medications, summaries, evidence, visits, followUps, savedScripts, sharedTips, myPlaybooks }, null, 2)],
-      { type: 'application/json' },
-    );
+    const csv = dataAsCsv({
+      export: { exportedAt: new Date().toISOString(), app: APP_NAME },
+      profile: safeProfile, medications, summaries, evidence, visits, followUps, savedScripts, sharedTips, myPlaybooks,
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `appointment-ready-data-${todayISO()}.json`;
+    a.download = `appointment-ready-data-${todayISO()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -212,9 +214,9 @@ function PrivacySection() {
       <div className="cols-2">
         <section className="pcard">
           <h2>Download my data</h2>
-          <p className="muted">Everything, as a PDF and a file.</p>
+          <p className="muted">Everything, as a PDF or a CSV file.</p>
           <div className="btn-row">
-            <button className="btn btn--outline" onClick={download}>Download file</button>
+            <button className="btn btn--outline" onClick={download}>Save as a CSV file</button>
             <Link className="btn btn--outline" to="/visits/history?print=1">Save as PDF</Link>
           </div>
         </section>
@@ -261,7 +263,7 @@ function NotificationsSection() {
   );
 }
 
-/* ---------- Install the app ---------- */
+/* ---------- Save to Homescreen (install the app) ---------- */
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -297,7 +299,7 @@ function InstallSection() {
 
   return (
     <>
-      <h1>Install the app</h1>
+      <h1>Save to Homescreen</h1>
       <p className="pub-sub">Add {APP_NAME} to your home screen so it opens like an app and works offline.</p>
       {installed ? (
         <section className="pcard"><p><strong>It’s installed.</strong> You’re using the app version right now.</p></section>

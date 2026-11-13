@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Brand } from '../components/Brand';
+import { Brand, BrandMark } from '../components/Brand';
 import { useSpeechInput } from '../components/TalkOrType';
 import { Checkbox, Chip } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
@@ -64,10 +64,10 @@ export function Onboarding() {
     <div className="pub">
       <a href="#main" className="sr-only">Skip to content</a>
       <header className="pub-header ob-header">
-        <Link to="/" className="pub-brand" aria-label={`${APP_NAME} home`}><Brand /></Link>
+        <Link to="/" className="pub-brand" aria-label={`${APP_NAME} home`}><BrandMark /><Brand /></Link>
         <span className="ob-step" aria-live="polite">Step {step} of {TOTAL}</span>
         <div className="pub-actions">
-          <Link to="/help-now" className="pub-help"><span className="help-long">Need help now? </span><span className="help-short">Help </span>988</Link>
+          <Link to="/help-now" className="pub-help">Need to talk?</Link>
           {step < TOTAL && (
             <button className="ob-later" onClick={() => navigate('/')} aria-label="Save and finish later">
               <span className="later-long">Save and finish later</span><span className="later-short">Finish later</span>
@@ -331,12 +331,14 @@ function QuickTry({ onBack, onNext }: { onBack: () => void; onNext: () => void }
       <div className="try-grid">
         <section className="pcard" aria-labelledby="you-say">
           <span className="eyebrow" id="you-say">You say</span>
-          {supported && (
-            <div className="try-talk">
-              <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>
-              <span className="muted">{listening ? 'Release to stop' : 'Hold to talk, or type below'}</span>
-            </div>
-          )}
+          {/* Always shown, on every browser and device. Where speech input isn't available yet,
+              the button just moves the cursor to the text box. */}
+          <div className="try-talk">
+            {supported
+              ? <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>
+              : <button type="button" className="talk" onClick={() => document.getElementById('try')?.focus()}>Talk</button>}
+            <span className="muted">{listening ? 'Release to stop' : 'Hold to talk, or type below'}</span>
+          </div>
           <label htmlFor="try" className="sr-only">Type what’s been hard</label>
           <textarea id="try" className="textarea" value={text} onChange={(e) => { setText(e.target.value); setEdits({}); }}
             placeholder="e.g. I can’t sleep and I’ve stopped seeing my friends. It’s been months." />

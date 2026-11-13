@@ -1,23 +1,24 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../../components/PublicLayout';
+import { APP_NAME } from '../../lib/brand';
 
 const FAQS: { q: string; a: string }[] = [
   {
     q: 'Is it really free?',
-    a: 'Yes. It’s free for patients, always. We never sell your data or show ads.',
+    a: 'Yes — free to use. We never sell your data, run ads, or use it to train AI.',
   },
   {
     q: 'Will my doctor see this?',
-    a: 'Only if you share it. You can show your brief in the room or send a link that expires.',
+    a: 'Only if you share it. You can show your summary in the room or send a link that expires.',
   },
   {
     q: 'Is this a diagnosis or medical advice?',
-    a: 'No. We help you put what you’re experiencing into words your doctor can act on, and suggest questions to ask. Decisions about diagnosis and treatment stay between you and your clinician.',
+    a: `No. ${APP_NAME} doesn’t diagnose or give medical advice. It helps you organize what you want to say and understand what your doctor said — your clinician makes the medical decisions.`,
   },
   {
     q: 'Can my family see my data?',
-    a: 'Only if you invite them. You decide what a family member or partner can see, and you can change or remove their access anytime.',
+    a: 'Only if you choose to share. You control who sees what — by default, no one else, including family, can see your data.',
   },
   {
     q: 'Does it work on my phone?',
@@ -50,15 +51,15 @@ export function Faq() {
 
         {list.length ? (
           <div className="faq">
-            {list.map((f, i) => (
-              <details key={f.q} open={!query && i === 1}>
+            {list.map((f) => (
+              <details key={f.q} open>
                 <summary>{f.q}</summary>
                 <p className="faq-a">{f.a}</p>
               </details>
             ))}
           </div>
         ) : (
-          <p className="muted">No questions match “{query}”. <Link to="/help-now">Need help now? Call or text 988.</Link></p>
+          <p className="muted">No questions match “{query}”. <Link to="/help-now">Need to talk? Call or text 988.</Link></p>
         )}
       </main>
     </PublicLayout>

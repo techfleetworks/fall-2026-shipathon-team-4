@@ -16,7 +16,7 @@ export function PrivacyPromise() {
         <section className="cols-2">
           <div className="pcard pcard--active">
             <h2>We never sell your data</h2>
-            <p>Not to advertisers, not to anyone. No ads, ever.</p>
+            <p>Not to advertisers, not to anyone.</p>
           </div>
           <div className="pcard">
             <h2>You choose who sees what</h2>
@@ -26,19 +26,18 @@ export function PrivacyPromise() {
         <section className="cols-3">
           <div className="pcard">
             <h2>Delete anytime</h2>
-            <p>Export everything or delete your account in Settings.</p>
+            <p>Delete your data or your whole account anytime in Settings.</p>
+            <Link to="/legal/privacy" className="text-link pcard-foot">Read the full privacy policy</Link>
           </div>
           <div className="pcard">
-            <h2>Recording only with consent</h2>
-            <p>Visit capture needs your OK and your doctor’s.</p>
+            <h2>We only record if you both say yes</h2>
+            <p>The app can record your visit to make a summary, but only if you and your doctor agree first. You can stop anytime.</p>
           </div>
           <div className="pcard">
-            <h2>AI and your data</h2>
-            <p>We don’t use what you share to train AI models.</p>
+            <h2>AI and data use</h2>
+            <p>We never use your data to train AI models — and we configure our AI provider so they don’t either.</p>
           </div>
         </section>
-
-        <Link to="/legal/privacy" className="text-link">Read the full privacy policy</Link>
       </main>
     </PublicLayout>
   );

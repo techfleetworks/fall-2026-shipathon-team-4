@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconDown, IconGrip, IconTrash, IconUp } from '../components/Icons';
-import { formatDate } from '../lib/dates';
+import { formatDate, formatShort } from '../lib/dates';
 import { hasCrisisLanguage } from '../lib/safety';
 import type { BriefSnapshot, Visit } from '../lib/types';
 
@@ -84,12 +84,16 @@ export function Priorities({ visit, update, suggestions, bare = false }: { visit
 }
 
 /** The doctor-facing brief (A1 layout). Shared by "Show in the room", the PDF and shared links. */
-export function DoctorBriefBody({ data, showTimeline = false }: { data: BriefSnapshot; showTimeline?: boolean }) {
+export function DoctorBriefBody({ data, showTimeline = false, variant = 'room' }: { data: BriefSnapshot; showTimeline?: boolean; variant?: 'room' | 'shared' }) {
   const showSummary = data.includeSummary !== false;
   const showPoints = data.includeTalkingPoints !== false;
+  const shared = variant === 'shared';
+  const sharedTitle = data.patient
+    ? ['Doctor summary', data.patient, data.visitDate && `for ${formatShort(data.visitDate)}`].filter(Boolean).join(' · ')
+    : `Doctor summary${data.who ? ` · ${data.who}` : ''}`;
   return (
     <div className="room">
-      <h1 className="room__who">{data.who || 'Patient summary'}</h1>
+      <h1 className="room__who">{shared ? sharedTitle : data.who || 'Patient summary'}</h1>
       <div className={`room__grid${showPoints && data.priorities.length ? '' : ' room__grid--one'}`}>
         {showPoints && data.priorities.length > 0 && (
           <section className="room__card room__card--main">
@@ -102,17 +106,23 @@ export function DoctorBriefBody({ data, showTimeline = false }: { data: BriefSna
             <section className="room__card">
               <span className="room__label">Symptoms</span>
               {data.symptoms.map((f) => (
-                <p key={f.label}><strong>{f.label}:</strong> {f.clinical}{f.quote && <span className="kv__quote" style={{ display: 'block' }}>In my words: “{f.quote}”</span>}</p>
+                <p key={f.label}><strong>{f.label}:</strong> {f.clinical}{f.quote && !shared && <span className="kv__quote" style={{ display: 'block' }}>In my words: “{f.quote}”</span>}</p>
               ))}
             </section>
           )}
           {showSummary && data.tried && (
             <section className="room__card">
-              <span className="room__label">Already tried</span>
-              <p><strong>{data.tried}</strong></p>
+              <span className="room__label">{shared ? 'Treatment history' : 'Already tried'}</span>
+              <p>{shared ? data.tried : <strong>{data.tried}</strong>}</p>
             </section>
           )}
-          {showPoints && (
+          {shared && showSummary && data.impact && (
+            <section className="room__card">
+              <span className="room__label">Daily impact</span>
+              <p>{data.impact}</p>
+            </section>
+          )}
+          {showPoints && (!shared || data.askingFor.length > 0) && (
             <section className="room__card">
               <span className="room__label">Asking for</span>
               <p><strong>{data.askingFor.length ? data.askingFor.join(' · ') : 'To discuss together'}</strong></p>

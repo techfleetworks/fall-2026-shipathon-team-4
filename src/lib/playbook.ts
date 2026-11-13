@@ -9,9 +9,35 @@ import type { AppData } from './store';
 import { selectLatestSummary, selectUpcomingVisit } from './store';
 import type { MyPlaybook } from './types';
 
-export function draftPlaybook(s: AppData): Omit<MyPlaybook, 'id' | 'createdAt'> {
+/** Situation chips on the PB1 form. */
+export const MAKE_SITUATIONS = ['Being brushed off', 'Side effects', 'Asking for a referral', 'Getting it in my chart'] as const;
+export type MakeSituation = (typeof MAKE_SITUATIONS)[number];
+
+/** What the PB1 form asks. All optional: with none, the playbook is built from history alone. */
+export interface PlaybookRequest {
+  /** "What are you worried might happen?" — used only to pick scripts and a title; never stored. */
+  worry?: string;
+  situation?: MakeSituation;
+  /** "For which visit?" */
+  visitId?: string;
+  /** "Make an AI version for me" from someone else's playbook. */
+  basedOn?: string;
+}
+
+/** Which "it's just…" the worry is about, if any. */
+function brushOffScript(worry: string, fallbackId: string): { id: string; title: string } {
+  const w = worry.toLowerCase();
+  if (/stress/.test(w)) return { id: 'dismiss-anxiety', title: 'If you hear “it’s just stress”' };
+  if (/anxi/.test(w)) return { id: 'dismiss-anxiety', title: 'If you hear “it’s just anxiety”' };
+  if (/depress/.test(w)) return { id: 'dismiss-depression', title: 'If you hear “it’s the depression”' };
+  if (/fine|well|look/.test(w)) return { id: 'dismiss-looks-fine', title: 'If you hear “you seem fine”' };
+  if (/time|wait/.test(w)) return { id: 'dismiss-time', title: 'If you hear “give it more time”' };
+  return { id: fallbackId, title: 'If you get brushed off' };
+}
+
+export function draftPlaybook(s: AppData, req: PlaybookRequest = {}): Omit<MyPlaybook, 'id' | 'createdAt'> {
   const latest = selectLatestSummary(s);
-  const visit = selectUpcomingVisit(s);
+  const visit = (req.visitId && s.visits.find((v) => v.id === req.visitId)) || selectUpcomingVisit(s);
   const field = (k: string) => {
     const f = latest?.fields.find((x) => x.key === k);
     return f && f.clinical !== 'Not discussed' ? f.clinical : undefined;
@@ -29,25 +55,50 @@ export function draftPlaybook(s: AppData): Omit<MyPlaybook, 'id' | 'createdAt'> 
     ? `I’d like to start with ${lead.charAt(0).toLowerCase() + lead.slice(1)}.${onset ? ` When it started: ${onset}.` : ''}${severity ? ` How bad: ${severity}.` : ''}`
     : 'I’d like to start with what’s been hardest lately, and how long it’s been going on.';
 
-  const ids: string[] = [];
-  if (medChange) ids.push('side-effect-timing', 'side-effect-options');
-  if (brushedOff === 'Yes' || brushedOff === 'Not sure') {
-    ids.push(reasons.includes('Worry or anxiety') && !reasons.includes('Low mood') ? 'dismiss-anxiety' : 'dismiss-depression');
+  const fallbackDismiss = reasons.includes('Worry or anxiety') && !reasons.includes('Low mood') ? 'dismiss-anxiety' : 'dismiss-depression';
+  let ids: string[] = [];
+  let title: string | undefined;
+  switch (req.situation) {
+    case 'Being brushed off': {
+      const b = brushOffScript(req.worry ?? '', fallbackDismiss);
+      ids = [b.id, 'doc-chart', 'esc-followup'];
+      title = b.title;
+      break;
+    }
+    case 'Side effects':
+      ids = ['side-effect-timing', 'side-effect-weekly', 'side-effect-options'];
+      title = 'Asking about side effects';
+      break;
+    case 'Asking for a referral':
+      ids = ['esc-second', 'doc-declined', 'esc-followup'];
+      title = 'Asking for a referral';
+      break;
+    case 'Getting it in my chart':
+      ids = ['doc-chart', 'doc-declined', 'doc-history'];
+      title = 'Getting it in my chart';
+      break;
+    default:
+      if (medChange) ids.push('side-effect-timing', 'side-effect-options');
+      if (brushedOff === 'Yes' || brushedOff === 'Not sure') ids.push(fallbackDismiss);
+      if (severity) ids.push('dismiss-looks-fine');
+      ids.push('doc-chart', 'esc-followup');
   }
-  if (severity) ids.push('dismiss-looks-fine');
-  ids.push('doc-chart', 'esc-followup');
+  const based = req.basedOn ? PLAYBOOKS.find((p) => p.id === req.basedOn) : undefined;
+  if (based) ids = [...based.scriptIds, ...ids];
   const scriptIds = [...new Set(ids)].slice(0, 4);
 
-  const peer = PLAYBOOKS.map((p) => ({ p, overlap: p.scriptIds.filter((x) => scriptIds.includes(x)).length }))
-    .sort((a, b) => b.overlap - a.overlap)[0];
+  const peer = based ?? PLAYBOOKS
+    .map((p) => ({ p, overlap: p.scriptIds.filter((x) => scriptIds.includes(x)).length }))
+    .sort((a, b) => b.overlap - a.overlap)
+    .find((x) => x.overlap > 0)?.p;
 
   return {
     visitId: visit?.id,
-    title: visit ? `For ${formatDate(visit.date)}${visit.clinician ? ` · ${visit.clinician}` : ''}` : 'For my next visit',
+    title: title ?? (visit ? `For ${formatDate(visit.date)}${visit.clinician ? ` · ${visit.clinician}` : ''}` : 'For my next visit'),
     opening,
     priorities,
     scriptIds,
     askingFor: visit?.askingFor ?? [],
-    peerPlaybookId: peer && peer.overlap > 0 ? peer.p.id : undefined,
+    peerPlaybookId: peer?.id,
   };
 }

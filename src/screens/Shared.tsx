@@ -1,11 +1,11 @@
-import { useParams } from 'react-router-dom';
-import { PublicLayout } from '../components/PublicLayout';
+import { Link, useParams } from 'react-router-dom';
 import { APP_NAME } from '../lib/brand';
 import { isLinkActive, useApp } from '../lib/store';
 import { DoctorBriefBody } from './Brief';
 
 /**
- * Shared doctor view (link, no login). Read-only snapshot of the brief.
+ * D1 · Shared doctor view (expiring link, no login) and D2 · Link expired / revoked.
+ * Read-only snapshot of the brief. The apricot bar marks it as a shared view.
  * LOCAL-ONLY MVP: the link is resolved from this device's storage; a server
  * replaces this lookup when accounts arrive.
  */
@@ -13,40 +13,50 @@ export function SharedBrief() {
   const { token } = useParams();
   const link = useApp((s) => (s.shareLinks ?? []).find((l) => l.token === token));
 
+  // D2: expired, revoked and unknown links all look the same, so nothing about the patient leaks — not even a name.
   if (!link || !isLinkActive(link)) {
-    const reason = !link ? 'missing' : link.revokedAt ? 'revoked' : 'expired';
     return (
-      <PublicLayout header="minimal">
-        <main id="main" className="pub-main pub-main--narrow">
-          <span className="eyebrow">Shared brief</span>
-          <h1>
-            {reason === 'revoked' ? 'This link was turned off' : reason === 'expired' ? 'This link has expired' : 'We can’t find this link'}
-          </h1>
-          <p className="pub-lead">
-            {reason === 'missing'
-              ? 'Check that the whole link was copied. Shared briefs can only be opened while the patient is sharing them.'
-              : 'The patient chose how long to share their brief, and that time is up or they stopped sharing. Ask them for a new link.'}
+      <div className="shared">
+        <header className="shared-bar"><span className="shared-bar__brand">{APP_NAME}</span></header>
+        <main id="main" className="shared-gone">
+          <div className="shared-gone__icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="56" height="56">
+              <path d="M16 22v-6a8 8 0 0 1 16 0v6" fill="none" stroke="currentColor" strokeWidth="2.2" />
+              <rect x="11" y="22" width="26" height="18" rx="4" fill="none" stroke="currentColor" strokeWidth="2.2" />
+            </svg>
+          </div>
+          <h1>This link is no longer active</h1>
+          <p className="muted">
+            It may have expired, or the patient stopped sharing it. Ask them to send a new link — they can re-share from {APP_NAME} in a few seconds.
           </p>
-          <p className="small muted">Nothing from this brief is kept once a link ends.</p>
+          <Link to="/" className="text-link" style={{ alignSelf: 'center' }}>What is {APP_NAME}?</Link>
         </main>
-      </PublicLayout>
+      </div>
     );
   }
 
-  const expires = new Date(link.expiresAt);
   return (
-    <PublicLayout header="minimal" footer={false}>
-      <main id="main" className="pub-main">
-        <div className="pcard pcard--muted">
-          <p className="small" style={{ margin: 0 }}>
-            <strong>Shared by the patient, read-only.</strong> Link expires{' '}
-            {expires.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at{' '}
-            {expires.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.
-          </p>
-        </div>
-        <DoctorBriefBody data={link.snapshot} showTimeline />
-        <p className="small muted">Prepared by the patient with {APP_NAME}. Patient-reported, not a diagnosis.</p>
+    <div className="shared">
+      <header className="shared-bar">
+        <span className="shared-bar__brand">{APP_NAME}</span>
+        <span className="shared-bar__note">Shared by the patient · patient-reported</span>
+        <span className="shared-bar__expires">{expiresIn(link.expiresAt)}</span>
+        <button className="btn shared-bar__print no-print" onClick={() => window.print()}>Print</button>
+      </header>
+      <main id="main" className="shared-main">
+        <DoctorBriefBody data={link.snapshot} showTimeline variant="shared" />
+        <p className="small muted">Prepared by the patient using {APP_NAME}. Not a diagnosis. View only.</p>
       </main>
-    </PublicLayout>
+    </div>
   );
+}
+
+/** "Link expires in 6 days" / "in 5 hours" / "in under an hour". */
+function expiresIn(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours < 1) return 'Link expires in under an hour';
+  if (hours < 24) return `Link expires in ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `Link expires in ${days} day${days === 1 ? '' : 's'}`;
 }
