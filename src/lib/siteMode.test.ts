@@ -33,6 +33,12 @@ describe('siteConfigFrom: one codebase, two live sites', () => {
     expect(siteConfigFrom({ VITE_SITE_MODE: 'demo', VITE_DEMO_URL: 'https://x.vercel.app' })).toEqual({ mode: 'demo' });
   });
 
+  it('demo site: knows the real users’ site for "create my own account"', () => {
+    expect(siteConfigFrom({ VITE_SITE_MODE: 'demo', VITE_LIVE_URL: 'https://fall-2026-shipathon-team-4.vercel.app' }))
+      .toEqual({ mode: 'demo', liveUrl: 'https://fall-2026-shipathon-team-4.vercel.app' });
+    expect(siteConfigFrom({ VITE_SITE_MODE: 'demo', VITE_LIVE_URL: 'javascript:alert(1)' })).toEqual({ mode: 'demo' });
+  });
+
   it('the real users’ site never shows a demo password, even if one is set by mistake', () => {
     expect(siteConfigFrom({ VITE_SITE_MODE: 'live', VITE_DEMO_LOGIN_PASSWORD: 'leaked' })).not.toHaveProperty('demoLogin');
   });

@@ -10,7 +10,9 @@
  *     VITE_SITE_MODE=demo
  *     VITE_DEMO_LOGIN_EMAIL=theo.demo@example.com
  *     VITE_DEMO_LOGIN_PASSWORD=<Theo's password>   (shown publicly on purpose, team option A)
- *       → the start page shows Theo's login so visitors can log in and out as Theo.
+ *     VITE_LIVE_URL=https://fall-2026-shipathon-team-4.vercel.app
+ *       → the start page shows Theo's login so visitors can log in and out as Theo; there is no sign-up on the demo
+ *         site (it has its own Supabase project with only Theo), so "Sign up" points to the real users' site.
  *
  * Theo's account is protected however public his password is: it can't be deleted or used to share links
  * (ADR-010), and `npm run seed:theo` resets his password and data.
@@ -24,6 +26,8 @@ export interface SiteConfig {
   demoUrl?: string;
   /** Demo site only: Theo's login, shown on the start page. */
   demoLogin?: { email: string; password: string };
+  /** Demo site only: the real users' site, where people create their own account. */
+  liveUrl?: string;
 }
 
 type Env = Record<string, string | boolean | undefined>;
@@ -48,7 +52,8 @@ export function siteConfigFrom(env: Env): SiteConfig {
   if (mode === 'demo') {
     const email = text(env.VITE_DEMO_LOGIN_EMAIL) || 'theo.demo@example.com';
     const password = text(env.VITE_DEMO_LOGIN_PASSWORD);
-    return { mode, ...(password ? { demoLogin: { email, password } } : {}) };
+    const liveUrl = safeUrl(env.VITE_LIVE_URL);
+    return { mode, ...(password ? { demoLogin: { email, password } } : {}), ...(liveUrl ? { liveUrl } : {}) };
   }
   const demoUrl = safeUrl(env.VITE_DEMO_URL);
   return { mode, ...(demoUrl ? { demoUrl } : {}) };
