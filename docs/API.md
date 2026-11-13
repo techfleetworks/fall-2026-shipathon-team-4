@@ -253,6 +253,26 @@ The response includes `label: "Synthetic — illustrative only, not medical advi
 (already wired in `Auth.tsx`). Logging out in demo mode clears Theo from the device. For the shared account, "Delete account" and creating
 doctor links are refused (403 `DEMO_ACCOUNT_READ_ONLY`, with a friendly message), so you may want to hide those buttons when `demoMode` is on.
 
+## 2g. Plain-language after-visit summary (new, ADR-011)
+
+Theo's past visit now has `visit.afterVisit` (and your Recap already shows its plain "What the doctor said" lines, plus ✓ on
+talking points that came up):
+
+```ts
+visit.afterVisit = {
+  youRaised:  ['You talked about feeling very sleepy in the day.', …],
+  doctorSaid: ['The doctor thinks this is from the depression.', …],   // same as visit.recap.doctorSaid
+  plan:       ['Wait and see for now.', 'No change for now.', 'Check again next month.'],
+  notCovered: ['The doctor did not talk about feeling dizzy when you stand up.'],
+  talkingPoints: [{ text, raised }], readingGrade: 3.4, meetsReadingTarget: true,
+}
+```
+
+**Not shown yet, your call where:** `plan` (it fits the After → Next steps step) and `notCovered` (e.g. "Not covered at this visit"
+under the Recap; it's the strongest line for the next visit). For a visit with only quick notes, `summarizeNotes(visit.notes)` from
+`src/lib/afterVisit/summary.ts` gives the same shape on the device. `POST /api/visit-summary` also returns `summary` (send
+`talkingPoints` to get `raised`), ready for when recording and transcription exist.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
