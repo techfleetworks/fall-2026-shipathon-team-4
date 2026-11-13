@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchDemoData, startDemo } from './demoApi';
+import { fetchDemoData, fetchMyAppData, startDemo } from './demoApi';
 
 const okBody = {
   status: 'ok',
@@ -31,6 +31,26 @@ describe('fetchDemoData', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(await p).toBeUndefined();
     vi.useRealTimers();
+  });
+});
+
+describe('fetchMyAppData (after logging in)', () => {
+  it('returns Theo’s record and says it is the demo account', async () => {
+    const out = await fetchMyAppData({ fetchImpl: answer({ status: 'ok', data: { profile: { name: 'Theo' }, visits: [] }, isDemoAccount: true }) });
+    expect(out).toEqual({ data: { profile: { name: 'Theo' }, visits: [] }, isDemoAccount: true });
+  });
+
+  it('is not the demo account unless the server says so', async () => {
+    const out = await fetchMyAppData({ fetchImpl: answer({ status: 'ok', data: { profile: { name: 'Ana' } } }) });
+    expect(out?.isDemoAccount).toBe(false);
+  });
+
+  it.each([
+    ['no record (404)', answer({ status: 'error' }, 404)],
+    ['signed out (401)', answer({ status: 'error' }, 401)],
+    ['no network', (async () => { throw new TypeError('offline'); }) as typeof fetch],
+  ])('returns nothing on %s, so the normal setup runs', async (_n, fetchImpl) => {
+    expect(await fetchMyAppData({ fetchImpl })).toBeUndefined();
   });
 });
 

@@ -16,6 +16,8 @@ import type { NextFunction, Request, Response } from 'express';
 export interface AuthUser {
   id: string;
   email?: string;
+  /** From app_metadata (only the server key can set it). 'public-demo' = Theo, the shared demo account (ADR-010). */
+  role?: string;
 }
 
 /** Returns the user for a valid access token, or null. Must not throw. */
@@ -48,7 +50,9 @@ export function authConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AuthCon
           return async (token) => {
             try {
               const { data, error } = await client.auth.getUser(token);
-              return error || !data.user ? null : { id: data.user.id, email: data.user.email ?? undefined };
+              if (error || !data.user) return null;
+              const role = data.user.app_metadata?.role;
+              return { id: data.user.id, email: data.user.email ?? undefined, ...(typeof role === 'string' ? { role } : {}) };
             } catch {
               return null;
             }

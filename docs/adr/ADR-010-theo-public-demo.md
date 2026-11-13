@@ -19,8 +19,15 @@ team couldn't update him in one place, and his last visit's Recap said "Nothing 
 
 ## Decision
 
-1. **Theo is a real Supabase account** (`theo.demo@example.com`) created by `npm run seed:theo` with **no password**
-   and `app_metadata.role = public-demo`. Nobody can sign in as Theo.
+1. **Theo is a real Supabase account** (`theo.demo@example.com`) created by `npm run seed:theo`, with
+   `app_metadata.role = public-demo` (only the server key can set it). **Update (team, Nov 13): the persona must log in and
+   sign out.** The seed sets his password from `THEO_DEMO_PASSWORD` in `.env.local`, which the team chooses and the script never prints.
+   - **Log in as Theo** → `GET /api/me/app-data` returns his record (dates moved to today, his own email added) and the app loads it.
+   - **Sign out** while in demo mode clears Theo from the device, so the next person starts clean. Real users' sign-out is unchanged.
+   - **A shared login is protected:** the API refuses `DELETE /api/account` and `POST /api/shares` for the `public-demo` role
+     (403 `DEMO_ACCOUNT_READ_ONLY`), so no visitor can delete Theo or make share links that everyone else would see.
+   - Known limit: someone logged in as Theo could change his password through Supabase directly (the app has no screen for it).
+     Re-running `npm run seed:theo` resets it.
 2. **One table for app data, `app_state`** (migration `20261113000000_app_state.sql`): one JSON record per user, in the shape
    the screens already use (`AppData`). Today it holds only Theo, marked `is_public_demo` (a unique index allows at most one).
    RLS: read own record only. There are **no write policies**, so only the server key writes, and nobody can make their own record

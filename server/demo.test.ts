@@ -118,7 +118,7 @@ describe('GET /api/demo', () => {
 
   it('a database error is a 500, never "not set up"', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const broken: DemoSource = { get: async () => { throw new Error('db down'); } };
+    const broken: DemoSource = { get: async () => { throw new Error('db down'); }, getForUser: async () => null };
     expect((await request(app(broken)).get('/api/demo')).status).toBe(500);
     err.mockRestore();
   });

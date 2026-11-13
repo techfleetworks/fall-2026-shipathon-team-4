@@ -21,7 +21,7 @@ import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
-import { authConfigFromEnv, requireUser, type AuthConfig } from './auth.js';
+import { authConfigFromEnv, requireUser, type AuthConfig, type AuthUser } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
 import { daysBetween, safeDemoData, shiftDates } from './demo/publicDemo.js';
 import { demoSourceFromEnv, type DemoSource } from './demo/source.js';
@@ -71,6 +71,8 @@ export type ApiErrorCode =
   | 'LINK_STOPPED'
   | 'SHARING_NOT_CONFIGURED'
   | 'DEMO_NOT_SET_UP'
+  | 'NO_APP_DATA'
+  | 'DEMO_ACCOUNT_READ_ONLY'
   | 'EMPTY_RESULTS'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
@@ -93,6 +95,8 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   LINK_NOT_FOUND: 'We can’t find this link. Check that the whole link was copied.',
   LINK_EXPIRED: 'This link has expired. Ask the patient for a new one.',
   LINK_STOPPED: 'The patient stopped sharing this link. Ask them for a new one.',
+  NO_APP_DATA: 'There’s no saved app data for this account on the server yet.',
+  DEMO_ACCOUNT_READ_ONLY: 'This is the shared demo account (Theo), so this can’t be done here. Sign up to use it with your own information.',
   DEMO_NOT_SET_UP: 'The demo patient isn’t set up on the server yet.',
   SHARING_NOT_CONFIGURED: 'Sharing with your doctor isn’t set up on the server yet.',
   INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
@@ -344,6 +348,25 @@ export function createApp({
     return res.json({ status: 'ok', data: shiftDates(safe, daysBetween(record.anchorDate, today())), label: SYNTHETIC_LABEL });
   });
 
+  /** Theo, the shared demo account: everyone who demos logs in as him, so nothing he does may affect others. */
+  const isDemoAccount = (res: Response) => (res.locals.user as AuthUser | undefined)?.role === 'public-demo';
+
+  /**
+   * GET /api/me/app-data: the signed-in account's app data on the server (ADR-010). Used when Theo logs in:
+   * his record is returned with dates moved to today, like the public demo. 200 { status: "ok", data, isDemoAccount }
+   * · 404 NO_APP_DATA (normal for real users until the Visit store sync exists) · 401 · 503
+   */
+  api.get('/me/app-data', requireUser({ ...auth, required: true }, sendError), async (_req, res) => {
+    const user = res.locals.user as AuthUser;
+    const record = demo ? await demo.getForUser(user.id) : null;
+    const safe = record ? safeDemoData(record.data) : undefined;
+    if (!record || !safe) return sendError(res, 404, 'NO_APP_DATA');
+    const demoAccount = isDemoAccount(res);
+    const data = demoAccount ? shiftDates(safe, daysBetween(record.anchorDate, today())) : safe;
+    // Their own email goes back to them only (the public demo never includes it).
+    return res.json({ status: 'ok', data: { ...data, profile: { ...(data.profile as object), ...(user.email ? { email: user.email } : {}) } }, isDemoAccount: demoAccount });
+  });
+
   // ---------------------------------------------------------------- sharing with the care team (ADR-009)
 
   const accountOnly = requireUser({ ...auth, required: true }, sendError);
@@ -360,6 +383,8 @@ export function createApp({
    */
   api.post('/shares', accountOnly, sharing, async (req, res) => {
     if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    // Links made as Theo would be visible (with doctors' emails) to everyone who demos as Theo.
+    if (isDemoAccount(res)) return sendError(res, 403, 'DEMO_ACCOUNT_READ_ONLY');
     const body: unknown = req.body;
     if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_SHARE');
     const recipient = parseRecipient(body.recipient);
@@ -420,6 +445,8 @@ export function createApp({
   api.delete('/account', requireUser({ ...auth, required: true }, sendError), async (_req, res) => {
     if (!auth.admin) return sendError(res, 503, 'AUTH_NOT_CONFIGURED');
     const user = res.locals.user as { id: string };
+    // One visitor must never be able to delete the demo account for everyone.
+    if (isDemoAccount(res)) return sendError(res, 403, 'DEMO_ACCOUNT_READ_ONLY');
     // Links still open on a doctor's screen are told right after the account (and with it every link) is gone.
     const openLinks = shares ? await shares.activeHashes(user.id).catch(() => []) : [];
     const ok = await auth.admin.deleteUser(user.id);
@@ -428,7 +455,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/demo', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

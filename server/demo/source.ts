@@ -13,10 +13,12 @@ export interface DemoRecord {
 export interface DemoSource {
   /** The public demo record, or null if none is set up. Throws on a database error. */
   get(): Promise<DemoRecord | null>;
+  /** This user's own record (used when Theo logs in), or null. Throws on a database error. */
+  getForUser(userId: string): Promise<DemoRecord | null>;
 }
 
-export function memoryDemoSource(record: DemoRecord | null): DemoSource {
-  return { get: async () => record };
+export function memoryDemoSource(record: DemoRecord | null, owners: Record<string, DemoRecord> = {}): DemoSource {
+  return { get: async () => record, getForUser: async (id) => owners[id] ?? null };
 }
 
 export function supabaseDemoSource(url: string, serviceKey: string): DemoSource {
@@ -25,6 +27,12 @@ export function supabaseDemoSource(url: string, serviceKey: string): DemoSource 
     async get() {
       const { data, error } = await db.from('app_state').select('data, anchor_date').eq('is_public_demo', true).maybeSingle();
       if (error) throw new Error('app_state demo lookup failed');
+      if (!data) return null;
+      return { data: data.data as unknown, anchorDate: String(data.anchor_date) };
+    },
+    async getForUser(userId) {
+      const { data, error } = await db.from('app_state').select('data, anchor_date').eq('user_id', userId).maybeSingle();
+      if (error) throw new Error('app_state lookup failed');
       if (!data) return null;
       return { data: data.data as unknown, anchorDate: String(data.anchor_date) };
     },

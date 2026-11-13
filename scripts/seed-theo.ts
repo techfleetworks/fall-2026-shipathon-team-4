@@ -4,9 +4,11 @@
  *
  *   npm run seed:theo          (reads SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY from .env.local)
  *
- * 1. Finds or creates Theo's account (theo.demo@example.com) with NO password: nobody can log in as Theo.
- * 2. Writes his app record (Diana's demo data + transcript recap) as the ONE public demo record.
- * Prints only counts, never keys.
+ * 1. Finds or creates Theo's account (theo.demo@example.com).
+ * 2. Password: set from THEO_DEMO_PASSWORD in .env.local (you choose it; at least 12 characters) so the team can
+ *    log in and out as Theo. Without it, Theo has no password and can't be logged into (Explore still works).
+ * 3. Writes his app record (Diana's demo data + transcript recap) as the ONE public demo record.
+ * Prints only counts, never keys or the password.
  */
 import { createClient } from '@supabase/supabase-js';
 import { buildTheoRecord, THEO_DEMO_EMAIL } from '../server/demo/theoRecord.js';
@@ -37,13 +39,23 @@ if (theoId) {
 } else {
   const { data, error } = await db.auth.admin.createUser({
     email: THEO_DEMO_EMAIL,
-    email_confirm: true, // no inbox exists at example.com, and there's no password: the account can't be signed into
+    email_confirm: true, // no inbox exists at example.com, so no email step; the password (if any) is set below
     user_metadata: { first_name: 'Theo', last_name: 'Marsh' },
     app_metadata: { role: 'public-demo', synthetic: true },
   });
   if (error || !data.user) throw new Error(`could not create Theo (${error?.status ?? 'error'})`);
   theoId = data.user.id;
-  console.log('Created Theo’s account (no password, cannot be signed into).');
+  console.log('Created Theo’s account.');
+}
+
+const password = process.env.THEO_DEMO_PASSWORD ?? '';
+if (password) {
+  if (password.length < 12) throw new Error('THEO_DEMO_PASSWORD must be at least 12 characters.');
+  const { error: pwError } = await db.auth.admin.updateUserById(theoId, { password, app_metadata: { role: 'public-demo', synthetic: true } });
+  if (pwError) throw new Error(`could not set Theo's password (${pwError.status ?? 'error'})`);
+  console.log('Theo’s password set from THEO_DEMO_PASSWORD (not shown). The team can log in as Theo.');
+} else {
+  console.log('No THEO_DEMO_PASSWORD in .env.local: Theo has no password, so nobody can log in as him (Explore still works).');
 }
 
 const record = buildTheoRecord();

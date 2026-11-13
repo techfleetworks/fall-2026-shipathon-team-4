@@ -40,3 +40,21 @@ Feature: Visitors explore Theo's live demo without an account, and nothing priva
     Given no demo record is set up on the server
     When a visitor opens the demo
     Then the server says the demo isn't set up
+
+  @audience:team @usecase:demo-login @category:happy-path @quality:functional @severity:high
+  Scenario: Logging in as Theo loads his record from the server
+    Given someone is logged in as Theo
+    When the app asks for his saved data
+    Then it gets Theo's record with his visits and the transcript recap
+
+  @security @audience:visitor @usecase:demo-login-no-delete @category:security @quality:integrity @severity:critical
+  Scenario: Nobody logged in as Theo can delete the shared demo account
+    Given someone is logged in as Theo
+    When they try to delete the account
+    Then the server refuses because it is the shared demo account
+
+  @security @audience:visitor @usecase:demo-login-no-share @category:security @quality:privacy @severity:high
+  Scenario: Nobody logged in as Theo can create doctor links everyone else would see
+    Given someone is logged in as Theo
+    When they try to share the brief with a doctor
+    Then the server refuses because it is the shared demo account

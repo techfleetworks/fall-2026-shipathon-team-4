@@ -5,6 +5,7 @@ import { createApp } from '../../server/app.js';
 import { shiftDates } from '../../server/demo/publicDemo.js';
 import { memoryDemoSource } from '../../server/demo/source.js';
 import { buildTheoRecord } from '../../server/demo/theoRecord.js';
+import { memoryShareStore } from '../../server/shares/store.js';
 
 interface World {
   record: Record<string, unknown> | null;
@@ -72,4 +73,54 @@ Then('the server refuses with {string}', function (this: World, _msg: string) {
 Then('the server says the demo isn\'t set up', function (this: World) {
   assert.equal(this.res?.status, 404);
   assert.equal(this.res?.body.error.code, 'DEMO_NOT_SET_UP');
+});
+
+// ---- logging in as Theo (the shared demo account)
+
+interface LoginWorld extends World {
+  loginApp?: ReturnType<typeof createApp>;
+  deleted?: boolean;
+}
+
+Given('someone is logged in as Theo', function (this: LoginWorld) {
+  const record = { data: buildTheoRecord(), anchorDate: SAVED };
+  this.deleted = false;
+  this.loginApp = createApp({
+    demo: memoryDemoSource(record, { 'theo-id': record }),
+    shares: memoryShareStore(),
+    today: () => TODAY,
+    auth: {
+      required: true,
+      verifyToken: async (t) => (t === 'theo' ? { id: 'theo-id', email: 'theo.demo@example.com', role: 'public-demo' } : null),
+      admin: { deleteUser: async () => { this.deleted = true; return true; } },
+    },
+  });
+});
+
+When('the app asks for his saved data', async function (this: LoginWorld) {
+  this.res = await request(this.loginApp!).get('/api/me/app-data').set('Authorization', 'Bearer theo');
+});
+
+When('they try to delete the account', async function (this: LoginWorld) {
+  this.res = await request(this.loginApp!).delete('/api/account').set('Authorization', 'Bearer theo');
+});
+
+When('they try to share the brief with a doctor', async function (this: LoginWorld) {
+  this.res = await request(this.loginApp!).post('/api/shares').set('Authorization', 'Bearer theo').send({
+    brief: { who: 'Theo', priorities: ['Sleepiness'], symptoms: [], tried: 'Not discussed', timeline: [], askingFor: [], demo: true },
+    recipient: { name: 'Dr. Lane', role: 'Primary care', email: 'lane@clinic.example' },
+    days: 7,
+  });
+});
+
+Then('it gets Theo\'s record with his visits and the transcript recap', function (this: LoginWorld) {
+  assert.equal(this.res?.status, 200);
+  assert.equal(this.res?.body.isDemoAccount, true);
+  assert.ok((this.res?.body.data.visits as { recap?: unknown }[]).some((v) => v.recap));
+});
+
+Then('the server refuses because it is the shared demo account', function (this: LoginWorld) {
+  assert.equal(this.res?.status, 403);
+  assert.equal(this.res?.body.error.code, 'DEMO_ACCOUNT_READ_ONLY');
+  assert.equal(this.deleted, false);
 });

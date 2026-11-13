@@ -4,6 +4,7 @@
  * copy is used instead, so the demo always runs. A visitor's changes stay on their device: demo data is
  * never sent back to the server.
  */
+import { jsonHeaders } from './api';
 import type { AppData } from './store';
 
 export const DEMO_TIMEOUT_MS = 3000;
@@ -25,6 +26,29 @@ export async function fetchDemoData({ fetchImpl = fetch, timeoutMs = DEMO_TIMEOU
     const lists = ['medications', 'summaries', 'evidence', 'visits', 'followUps', 'savedScripts'] as const;
     if (!lists.every((k) => Array.isArray(d[k]))) return undefined;
     return { ...(d as Partial<AppData>), demoMode: true };
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * After logging in: this account's app data on the server (GET /api/me/app-data). Today only Theo, the shared
+ * demo account, has a server record; for everyone else this returns undefined and the normal setup runs.
+ * Never throws.
+ */
+export async function fetchMyAppData({ fetchImpl = fetch, timeoutMs = DEMO_TIMEOUT_MS }: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}): Promise<
+  { data: Partial<AppData>; isDemoAccount: boolean } | undefined
+> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl('/api/me/app-data', { method: 'GET', headers: await jsonHeaders(), signal: controller.signal });
+    if (res.status !== 200) return undefined;
+    const body: unknown = await res.json();
+    if (!isObj(body) || body.status !== 'ok' || !isObj(body.data) || !isObj(body.data.profile)) return undefined;
+    return { data: body.data as Partial<AppData>, isDemoAccount: body.isDemoAccount === true };
   } catch {
     return undefined;
   } finally {
