@@ -7,6 +7,7 @@ import { buildBriefSnapshot } from '../../lib/brief';
 import { formatDate, formatShort, todayISO, toISODate } from '../../lib/dates';
 import { parseNotes, type FoundItem, type FoundKind } from '../../lib/importParse';
 import { draftPlaybook } from '../../lib/playbook';
+import { suggestQuestions } from '../../lib/questions/suggest';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { isLinkActive, selectLatestSummary, useApp, useDraft } from '../../lib/store';
 import {
@@ -473,7 +474,16 @@ export function TalkingPointsStep() {
             {visit.priorities.length > 0 && <span className="pill pill--amber">Ready for your visit</span>}
           </div>
           <p className="muted" style={{ margin: 0 }}>Your visit goes fast. Drag to put what matters most first.</p>
-          <Priorities visit={visit} update={update} suggestions={suggestionsFrom(latest?.fields.find((f) => f.key === 'symptoms')?.clinical)} bare />
+          {/* Suggested questions from the patient's goal + history come first (ADR-012), then symptoms from the story. */}
+          <Priorities
+            visit={visit}
+            update={update}
+            suggestions={[
+              ...suggestQuestions(state, visit, todayISO()).map((q) => q.text),
+              ...suggestionsFrom(latest?.fields.find((f) => f.key === 'symptoms')?.clinical),
+            ]}
+            bare
+          />
           <div className="stack-sm">
             <span className="eyebrow-soft">What I’m asking for</span>
             <ChipMulti label="What I'm asking for" options={[...new Set([...ASKING, ...visit.askingFor])]} value={visit.askingFor} onChange={(askingFor) => update({ askingFor })} />
