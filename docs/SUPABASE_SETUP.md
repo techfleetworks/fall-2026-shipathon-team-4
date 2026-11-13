@@ -73,3 +73,31 @@ Then **redeploy** (Deployments → ⋯ → Redeploy), because `VITE_` values are
 - **Supabase Auth:** each person's email and a **hash** of their password (Supabase handles hashing; our code never stores it).
 - **`profiles` table:** first and last name. Only that person can read or change their row; deleting the account deletes it.
 - **Still on the device for now:** stories, visits, recaps (ADR-001 Decision 5 moves the approved ones to the database next).
+
+## 8. Sharing with doctors (ADR-009)
+Run once, after step 2: **SQL Editor → New query →** paste all of
+`supabase/migrations/20261112000000_shared_briefs.sql` **→ Run.** It adds two tables:
+
+- **`care_team`**: the people a patient shares with (name, role, work email, clinic).
+- **`shared_briefs`**: one expiring link per person, holding the frozen one-page brief and a **hash** of the link
+  (the link itself is never stored).
+
+Both have Row-Level Security (each person reads only their own rows) and are deleted with the account.
+Nothing to add in Vercel: the API uses the `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` you already set.
+Check: **Table Editor** shows both tables with the "RLS enabled" label. `GET /api/shared/<anything>` on the live site
+answers `404 LINK_NOT_FOUND` (before the migration it answers `503` or `500`).
+
+**On the server after this:** the one-page briefs a patient chose to share, until they expire, are stopped, or the
+account is deleted. Expired and stopped links stay in the table (so the patient's "Shared with" list stays accurate)
+until the account is deleted. A cleanup job for old links is a follow-up.
+
+## 9. Theo, the public demo patient (ADR-010)
+1. **SQL Editor → New query →** paste all of `supabase/migrations/20261113000000_app_state.sql` **→ Run.**
+   Adds `app_state` (one app-data record per user, RLS: read own only, no write policies).
+2. In `.env.local`, add `THEO_DEMO_PASSWORD=` followed by a password your team chooses (at least 12 characters, no spaces or quotes).
+   Share it only with people giving the demo.
+3. On your computer: `npm run seed:theo`. This creates Theo's account (`theo.demo@example.com`), sets that password (never printed) and
+   saves his record as the one public demo. Run it again whenever the demo data changes or to reset his password.
+4. Check: **Authentication → Users** lists `theo.demo@example.com`. `GET /api/demo` returns Theo. Logging in as Theo opens his Home.
+
+Nothing to add in Vercel (it uses `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`).

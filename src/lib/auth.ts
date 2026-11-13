@@ -96,6 +96,7 @@ export async function deleteServerAccount(fetchImpl: typeof fetch = fetch): Prom
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) return { ok: false, message: 'Please log in again, then delete your account.' };
     const res = await fetchImpl('/api/account', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 403) return { ok: false, message: 'This is the shared demo account (Theo), so it can’t be deleted. Log out instead.' };
     if (res.status !== 204) return { ok: false, message: 'We couldn’t delete your account just now. Nothing was deleted; please try again.' };
     await logOut();
     return { ok: true };
