@@ -108,7 +108,7 @@ function SubHeader({ title, back, onBack, backLabel, exit, right }: Extract<Head
 
 /** Every page shows the crisis line in the header (site map). */
 function AccountLink() {
-  return <Link to="/help-now" className="header-link header-988">Help · 988</Link>;
+  return <Link to="/help-now" className="header-link header-988" aria-label="Need to talk? Call or text 988">Need to talk?</Link>;
 }
 
 function AccountMenu() {
@@ -129,7 +129,7 @@ function AccountMenu() {
   return (
     <div ref={ref} className="header__end">
       <Link to="/help-now" className="pub-help pub-help--app" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
-      <Link to="/help-now" className="header-link header-988 header-988--phone">Help · 988</Link>
+      <Link to="/help-now" className="header-link header-988 header-988--phone" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
       <button className="avatar" aria-label="Account menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {initial}
       </button>
