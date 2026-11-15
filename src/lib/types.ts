@@ -108,6 +108,11 @@ export interface Visit {
   id: string;
   date: string; // YYYY-MM-DD
   clinician?: string;
+  /** V2: the doctor's email, for the patient's own reference (nothing is sent to it). */
+  clinicianEmail?: string;
+  /** V2: hospital or clinic the doctor works at. */
+  affiliation?: string;
+  /** Type of doctor: a preset ("Primary care"…) or what the patient typed under "Other". */
   specialty?: string;
   /** HH:MM, optional */
   time?: string;
@@ -118,8 +123,8 @@ export interface Visit {
   askingFor: string[];
   /** Playbooks (script ids) to bring — B4. */
   scripts?: string[];
-  /** B5 prep, per visit. */
-  prep?: { feeling?: string; checks: string[]; extra: string[] };
+  /** B5 prep, per visit. `feeling` is the old single pick; read it through `prepFeelings()`. */
+  prep?: { feelings?: string[]; feeling?: string; checks: string[]; extra: string[] };
   /** B6: marked once a link or PDF was made. */
   shared?: boolean;
   /** A2: consent outcome for capturing the visit. */
@@ -169,6 +174,10 @@ export interface BriefSnapshot {
   priorities: string[];
   symptoms: { label: string; clinical: string; quote?: string }[];
   tried: string;
+  /** "Name, age" for the D1 title. Missing on links made before it existed. */
+  patient?: string;
+  /** D1 "Daily impact", from the severity answer. */
+  impact?: string;
   timeline: { date: string; detail: string }[];
   askingFor: string[];
   demo: boolean;

@@ -29,7 +29,7 @@ export function beforeSteps(s: AppData, v: Visit) {
     { slug: '', label: 'Name how I feel', done: !!latest },
     { slug: 'summary', label: 'Doctor summary', done: !!latest },
     { slug: 'brief', label: 'Talking points', done: v.priorities.length > 0 },
-    { slug: 'today', label: 'Prep', done: !!v.prep && (v.prep.checks.length > 0 || !!v.prep.feeling) },
+    { slug: 'today', label: 'Prep', done: !!v.prep && (v.prep.checks.length > 0 || prepFeelings(v.prep).length > 0) },
     { slug: 'share', label: 'Share', done: !!v.shared },
   ];
 }
@@ -141,4 +141,9 @@ export function VisitIndex() {
   const visit = useVisitParam();
   if (!visit) return <Navigate to="/visits" replace />;
   return <Navigate to={`/visits/${visit.id}/${defaultStage(visit)}`} replace />;
+}
+
+/** Feelings picked on the Prep step. Older visits saved a single `feeling`; it reads as a one-item list. */
+export function prepFeelings(prep?: { feelings?: string[]; feeling?: string }): string[] {
+  return prep?.feelings ?? (prep?.feeling ? [prep.feeling] : []);
 }
