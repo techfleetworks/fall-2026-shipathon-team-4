@@ -331,6 +331,20 @@ Server version (same engine, for a future Claude upgrade or other clients): `POS
 `{ medications?, evidence?, visits?, followUps?, summaries? }` (the app's own fields; dates `YYYY-MM-DD`; up to 500 of each) →
 `200 { status: "ok", caseView, disclaimer }` · `200 { status: "crisis", help }` · `400 INVALID_CASE` · `415`. Nothing is stored or logged.
 
+## 2m. Saving the record to the server, encrypted (new, ADR-018)
+
+**Nothing to build yet:** this is the storage under the coming **Visit store** PR (an opt-in "Back up and sync my record" switch in
+Settings, plus sync). Signed-in only; Theo is read-only. The server encrypts the record before it reaches the database.
+
+| Call | Body | Answers |
+|---|---|---|
+| `GET /api/me/record` | | `200 { status: "ok", record, version, updatedAt }` · `404 NO_RECORD` · `401` · `503 RECORD_STORE_NOT_CONFIGURED` |
+| `PUT /api/me/record` | `{ record, baseVersion }` (0 for the first save) | `200 { status: "ok", version, updatedAt }` · `409 { status: "conflict", current }` (another device saved first: merge, then save again with `current.version`) · `400 INVALID_RECORD` · `403 DEMO_ACCOUNT_READ_ONLY` |
+| `DELETE /api/me/record` | | `204` · `404 NO_RECORD` · `403` |
+
+`record` is the app's own data (profile, medications, summaries, evidence, visits, followUps, savedScripts, sharedTips, myPlaybooks,
+notifications, morning, textScale), up to 512 KB. Never stored: the password hash, the email, share links, `signedIn`, `demoMode`.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

@@ -72,7 +72,8 @@ Then **redeploy** (Deployments → ⋯ → Redeploy), because `VITE_` values are
 ## What's on the server after this
 - **Supabase Auth:** each person's email and a **hash** of their password (Supabase handles hashing; our code never stores it).
 - **`profiles` table:** first and last name. Only that person can read or change their row; deleting the account deletes it.
-- **Still on the device for now:** stories, visits, recaps (ADR-001 Decision 5 moves the approved ones to the database next).
+- **Still on the device for now:** stories, visits, recaps. After step 10 and the Visit store PR, people who turn on backup also get an
+  **encrypted** copy in `visit_records` (ADR-018).
 
 ## 8. Sharing with doctors (ADR-009)
 Run once, after step 2: **SQL Editor → New query →** paste all of
@@ -101,3 +102,17 @@ until the account is deleted. A cleanup job for old links is a follow-up.
 4. Check: **Authentication → Users** lists `theo.demo@example.com`. `GET /api/demo` returns Theo. Logging in as Theo opens his Home.
 
 Nothing to add in Vercel (it uses `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`).
+
+## 10. Encrypted record storage for the Visit store (ADR-018)
+Do this in **both** projects (real and DEMO). The demo never saves records (Theo is read-only), but the table keeps both projects the same.
+1. **SQL Editor → New query →** paste all of `supabase/migrations/20261115000000_visit_records.sql` **→ Run.**
+   Adds `visit_records` (one encrypted record per user). Browser keys can't read or write it at all; only the API server can.
+2. **Make an encryption key** on your computer (do not paste it anywhere but the places below):
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+3. Put it in `.env.local` as `RECORD_ENCRYPTION_KEY=` and in Vercel (real users' project) as `RECORD_ENCRYPTION_KEY`. Each Vercel project
+   gets **its own** key. Leaving it out keeps record saving switched off (the API answers 503), it never saves unencrypted.
+4. **Back the key up** in the team's password manager. **If the key is lost, saved records can't be read by anyone, ever.**
+5. Changing the key later: move the old one to `RECORD_ENCRYPTION_KEY_PREVIOUS`, put the new one in `RECORD_ENCRYPTION_KEY`, redeploy.
+   Records still open with the old key and move to the new one the next time they're saved.
+6. Check: with sync turned on in the app (next PR), **Table Editor → visit_records** shows rows whose `envelope` is unreadable
+   (`ct`, `iv`, `tag`), never health words.
