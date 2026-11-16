@@ -76,7 +76,8 @@ interface AppActions {
   deletePlaybook: (id: string) => void;
   createShareLink: (snapshot: ShareLink['snapshot'], days: number) => ShareLink;
   revokeShareLink: (id: string) => void;
-  loadDemo: () => void;
+  /** Fills the app with Theo's demo data: from the server when given (ADR-010), else the built-in copy. */
+  loadDemo: (data?: Partial<AppData>) => void;
   deleteEverything: () => void;
 }
 
@@ -241,7 +242,7 @@ export const useApp = create<AppData & AppActions>()(
       revokeShareLink: (id) =>
         set((s) => ({ shareLinks: (s.shareLinks ?? []).map((l) => (l.id === id ? { ...l, revokedAt: new Date().toISOString() } : l)) })),
 
-      loadDemo: () => set((s) => ({ ...EMPTY, textScale: s.textScale, ...buildDemoState() })),
+      loadDemo: (data) => set((s) => ({ ...EMPTY, textScale: s.textScale, ...(data ?? buildDemoState()), demoMode: true })),
 
       deleteEverything: () => {
         set({ ...EMPTY });

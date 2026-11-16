@@ -90,3 +90,14 @@ answers `404 LINK_NOT_FOUND` (before the migration it answers `503` or `500`).
 **On the server after this:** the one-page briefs a patient chose to share, until they expire, are stopped, or the
 account is deleted. Expired and stopped links stay in the table (so the patient's "Shared with" list stays accurate)
 until the account is deleted. A cleanup job for old links is a follow-up.
+
+## 9. Theo, the public demo patient (ADR-010)
+1. **SQL Editor → New query →** paste all of `supabase/migrations/20261113000000_app_state.sql` **→ Run.**
+   Adds `app_state` (one app-data record per user, RLS: read own only, no write policies).
+2. In `.env.local`, add `THEO_DEMO_PASSWORD=` followed by a password your team chooses (at least 12 characters, no spaces or quotes).
+   Share it only with people giving the demo.
+3. On your computer: `npm run seed:theo`. This creates Theo's account (`theo.demo@example.com`), sets that password (never printed) and
+   saves his record as the one public demo. Run it again whenever the demo data changes or to reset his password.
+4. Check: **Authentication → Users** lists `theo.demo@example.com`. `GET /api/demo` returns Theo. Logging in as Theo opens his Home.
+
+Nothing to add in Vercel (it uses `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`).

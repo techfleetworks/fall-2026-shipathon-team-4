@@ -241,6 +241,18 @@ second** when the patient stops sharing (Supabase Realtime signal; 30-second re-
 - Deleting the account stops every share (the database deletes them). Say so in the delete dialog, and consider
   the **type DELETE to confirm** pattern there.
 
+## 2f. Theo's demo from the server: `GET /api/demo` (new, ADR-010)
+
+"Explore with demo data" (Landing and Settings) now calls `startDemo(loadDemo)` from `src/lib/demoApi.ts`. It loads Theo from
+the server and falls back to the built-in `buildDemoState()` if the server doesn't answer within 3 seconds. **Nothing to change on
+your side.** Your demo content is the source: after you edit `src/data/demo.ts`, a backend dev runs `npm run seed:theo`.
+Theo's past visit now has `recap.source: 'transcript'` with Dr. Lane's lines, which your Recap shows as "From your transcript".
+The response includes `label: "Synthetic — illustrative only, not medical advice."`
+
+**Logging in as Theo** (`theo.demo@example.com`; the password is in the team's `.env.local`) loads his record via `GET /api/me/app-data`
+(already wired in `Auth.tsx`). Logging out in demo mode clears Theo from the device. For the shared account, "Delete account" and creating
+doctor links are refused (403 `DEMO_ACCOUNT_READ_ONLY`, with a friendly message), so you may want to hide those buttons when `demoMode` is on.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
