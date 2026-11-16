@@ -44,10 +44,10 @@ Then('they see Theo\'s visits with Dr. Lane', function (this: World) {
   assert.ok((this.res?.body.data.visits as { clinician: string }[]).every((v) => v.clinician === 'Dr. Lane'));
 });
 
-Then('his last visit\'s recap shows what Dr. Lane said in the transcript', function (this: World) {
+Then('his last visit\'s recap shows what Dr. Lane said, in plain words', function (this: World) {
   const recap = (this.res?.body.data.visits as { recap?: { doctorSaid: string[]; source: string } }[]).find((v) => v.recap)?.recap;
   assert.equal(recap?.source, 'transcript');
-  assert.ok(recap?.doctorSaid.some((l) => l.includes('probably the depression')));
+  assert.ok(recap?.doctorSaid.includes('The doctor thinks this is from the depression.'));
 });
 
 Then('it is labelled {string}', function (this: World, label: string) {

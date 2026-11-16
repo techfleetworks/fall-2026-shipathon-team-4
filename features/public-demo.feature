@@ -16,7 +16,7 @@ Feature: Visitors explore Theo's live demo without an account, and nothing priva
   Scenario: A visitor opens Theo's demo without signing in
     When a visitor opens the demo
     Then they see Theo's visits with Dr. Lane
-    And his last visit's recap shows what Dr. Lane said in the transcript
+    And his last visit's recap shows what Dr. Lane said, in plain words
     And it is labelled "Synthetic — illustrative only, not medical advice."
 
   @audience:visitor @usecase:demo-fresh-dates @category:happy-path @quality:functional @severity:medium

@@ -20,6 +20,7 @@ import { LABS_NOTE, MAX_LAB_FIELD_CHARS, MAX_LAB_ROWS, type LabRow } from '../sr
 import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
+import { summarizeVisit } from '../src/lib/afterVisit/summary.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig, type AuthUser } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
@@ -268,13 +269,22 @@ export function createApp({
     if (typeof source !== 'string' || !SOURCES.includes(source as TranscriptSource)) return sendError(res, 400, 'INVALID_INPUT');
     const patientName = body.patientName;
     if (patientName !== undefined && (typeof patientName !== 'string' || patientName.length > 80)) return sendError(res, 400, 'INVALID_INPUT');
+    // Optional: the visit's talking points, so the summary can say which ones came up (up to 3, as in the app).
+    const talkingPoints = body.talkingPoints ?? [];
+    if (!Array.isArray(talkingPoints) || talkingPoints.length > 3 || !talkingPoints.every((p) => typeof p === 'string' && p.length <= 300)) {
+      return sendError(res, 400, 'INVALID_INPUT');
+    }
 
     const outcome = processTranscript(body.transcript, source as TranscriptSource);
     if (outcome.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
     if (outcome.status === 'rejected') return res.status(400).json({ status: 'error', error: outcome.error });
     const { payload } = outcome;
+    // Plain-language after-visit summary (ADR-011). Crisis in the talking points still routes to help.
+    const after = summarizeVisit(payload, { patientName, talkingPoints });
+    if (after.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
     return res.status(200).json({
       status: 'ok',
+      summary: after.status === 'ok' ? after.summary : null,
       doctorSaid: doctorSaidFrom(payload, patientName),
       clinicians: clinicianSpeakers(payload, patientName),
       dialogueTurns: payload.stats.dialogueTurns,

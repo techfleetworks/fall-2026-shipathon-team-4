@@ -68,14 +68,18 @@ describe('buildTheoRecord: built from the team’s existing content', () => {
     expect(theo.demoMode).toBe(true);
   });
 
-  it('adds Dr. Lane’s lines from transcript.txt to the past visit only', () => {
+  it('gives the past visit (only) a plain-language summary of transcript.txt', () => {
     expect(past).toHaveLength(1);
-    expect(past[0].recap!.source).toBe('transcript');
-    expect(past[0].recap!.doctorSaid).toEqual([
-      'That’s probably the depression itself sapping your energy. Low energy is a core symptom.',
-      'Your body usually adjusts to the medication in a few weeks. Let’s give it time.',
-      'It’s possible, but I’d still put it down to the depression. Try to push through and we’ll reassess next month.',
-    ].map((s) => s.replace(/’/g, "'")));
+    const v = past[0] as typeof past[0] & { covered?: string[]; afterVisit?: { plan: string[]; notCovered: string[]; meetsReadingTarget: boolean } };
+    expect(v.recap!.source).toBe('transcript');
+    // The Recap's "What the doctor said" is now in plain words, not Dr. Lane's exact sentences.
+    expect(v.recap!.doctorSaid).toContain('The doctor thinks this is from the depression.');
+    expect(v.recap!.doctorSaid.join(' ')).not.toMatch(/sapping|reassess|core symptom/);
+    expect(v.afterVisit!.plan).toContain('Check again next month.');
+    expect(v.afterVisit!.notCovered).toContain('The doctor did not talk about feeling dizzy when you stand up.');
+    expect(v.afterVisit!.meetsReadingTarget).toBe(true);
+    // His talking point came up, so Diana's Recap no longer says "(not covered)".
+    expect(v.covered).toEqual(['Daytime sleepiness since the dose change']);
   });
 
   it('adds his last name from personas.json, and nothing from the crisis fixture', () => {
