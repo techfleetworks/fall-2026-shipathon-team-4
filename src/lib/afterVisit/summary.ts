@@ -25,6 +25,8 @@ export interface AfterVisitSummary {
   doctorSaid: string[];
   plan: string[];
   notCovered: string[];
+  /** Things the clinician said they or the clinic would do, e.g. "Run a thyroid panel" (for action items, ADR-013). */
+  promised: string[];
   talkingPoints: { text: string; raised: boolean }[];
   /** Flesch-Kincaid grade of the summary's own sentences (quotes excluded). */
   readingGrade: number;
@@ -47,6 +49,8 @@ const ADJUST = /\b(?:body|you)\b.*\b(?:adjusts?|get used to|settle)\b/i;
 const WAIT = /\bgive it (?:some )?time\b|\bwait and see\b|\blet'?s wait\b/i;
 const NO_CHANGE = /\bpush through\b|\bkeep going\b|\bstay the course\b|\bsame dose\b|\bno change\b|\bcontinue (?:the|your) (?:current )?(?:dose|medication|meds)\b/i;
 const FOLLOW_UP = /\breassess\b|\bre-?check\b|\bcheck (?:it |back |in )?again\b|\bfollow[- ]?up\b|\bsee you\b|\bcome back\b/i;
+/** "I'll order a blood test", "let us run an ECG": something the clinician or clinic will do. */
+const PROMISE = /\b(?:I'?ll|I will|we'?ll|we will|let'?s|let us)\s+(order|send|run|schedule|refer you|book|call you|recheck|check|test|get)\b\s*([^.?!]*)/i;
 const WHEN = /\b(next (?:week|month|visit)|in (?:\d+|a few|one|two|three|four|six) (?:days?|weeks?|months?))\b/i;
 const MED_TIMING = /\b(?:started|began|since)\b[^.?!]*\b(?:dose|medication|meds|medicine)\b[^.?!]*\b(?:change|changed|increase|went up)\b|\bsince we upped\b|\bright after the dose\b/i;
 const MED_WORD = /\b(?:medication|medicine|meds|dose|pills?)\b/i;
@@ -122,6 +126,7 @@ export function summarizeVisit(
 
   // What the doctor said, in plain words.
   const doctorSaid: string[] = [];
+  const promised: string[] = [];
   let cause: string | undefined;
   for (const s of doctorTurns.flatMap(sentencesOf)) {
     const c = CAUSE.exec(s)?.[1]?.toLowerCase().replace(/^your /, '');
@@ -134,6 +139,11 @@ export function summarizeVisit(
       doctorSaid.push(`The doctor said this is common with ${cause}.`);
     } else if (ADJUST.test(s)) {
       doctorSaid.push(`The doctor thinks your body will get used to the medicine${/\bfew weeks\b/i.test(s) ? ' in a few weeks' : ''}.`);
+    } else if (PROMISE.test(s) && !FOLLOW_UP.test(s)) {
+      const m = PROMISE.exec(s)!;
+      const task = toPlainWords(`${m[1]} ${m[2]}`.trim()).replace(/\s+today$/i, '');
+      promised.push(task.charAt(0).toUpperCase() + task.slice(1));
+      doctorSaid.push(`The doctor will ${task}.`);
     } else if (WAIT.test(s) || NO_CHANGE.test(s) || FOLLOW_UP.test(s)) {
       // Plan sentences go to "plan".
     } else if ((s.match(/[A-Za-z]+/g) ?? []).length >= 4) {
@@ -148,7 +158,7 @@ export function summarizeVisit(
   for (const p of points) if (!p.raised) notCovered.push(`This talking point did not come up: ${p.text}.`);
 
   return finish(
-    { source: 'transcript', youRaised: uniq(youRaised), doctorSaid: uniq(doctorSaid), plan: planFrom(doctorText), notCovered: uniq(notCovered), talkingPoints: points },
+    { source: 'transcript', youRaised: uniq(youRaised), doctorSaid: uniq(doctorSaid), plan: planFrom(doctorText), notCovered: uniq(notCovered), promised: uniq(promised), talkingPoints: points },
     `${allText}\n${talkingPoints.join('\n')}`,
   );
 }
@@ -162,7 +172,7 @@ export function summarizeNotes(notes: string, { talkingPoints = [] }: { talkingP
   const raisedPairs = pairsIn(notes);
   const points = talkingPoints.map((text) => ({ text, raised: pointRaised(text, notes, raisedPairs) }));
   return finish(
-    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${p.text}.`), talkingPoints: points },
+    { source: 'notes', youRaised: [], doctorSaid, plan, notCovered: points.filter((p) => !p.raised).map((p) => `This talking point is not in your notes: ${p.text}.`), promised: [], talkingPoints: points },
     `${notes}\n${talkingPoints.join('\n')}`,
   );
 }

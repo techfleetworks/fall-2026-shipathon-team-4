@@ -281,6 +281,13 @@ talking-points step: they come first in the `Priorities` suggestion chips. Ideas
 your visit on Nov 4."), relabel the chips "From your history", or give them their own "Questions to ask" list, since chips hide once
 a visit has 3 talking points (Theo's next visit does).
 
+## 2i. Action items (new, ADR-013)
+
+**Nothing to build:** action items are saved as normal follow-ups, so your **Next steps** screen already lists them (Theo's shows
+"Ask about feeling dizzy when you stand up · You · by Dec 3"). For a visit summarized on the device:
+`extractActionItems(visit.afterVisit, { visitDate: visit.date, clinician: visit.clinician, upcomingVisits: state.visits, existing })`
+from `src/lib/afterVisit/actionItems.ts` returns `{ step, owner, dueDate, isVisit, why }[]`, ready for `addFollowUp`. Optional: show `why`.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

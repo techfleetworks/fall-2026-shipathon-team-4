@@ -108,8 +108,8 @@ describe('summarizeVisit: other visits', () => {
   });
 
   it('quotes a sentence it can’t rewrite instead of guessing what it means', () => {
-    const out = summarizeVisit(payloadOf('Theo: Hi.\nDr. Lane: Hello there.\nTheo: I feel off.\nDr. Lane: Let us run a thyroid panel and an ECG today.'), { patientName: 'Theo' });
-    expect(out.status === 'ok' && out.summary.doctorSaid).toEqual(['The doctor also said: “Let us run a thyroid panel and an ECG today.”']);
+    const out = summarizeVisit(payloadOf('Theo: Hi.\nDr. Lane: Hello there.\nTheo: I feel off.\nDr. Lane: Your thyroid numbers were borderline last spring.'), { patientName: 'Theo' });
+    expect(out.status === 'ok' && out.summary.doctorSaid).toEqual(['The doctor also said: “Your thyroid numbers were borderline last spring.”']);
   });
 
   it('lists a talking point that never came up', () => {

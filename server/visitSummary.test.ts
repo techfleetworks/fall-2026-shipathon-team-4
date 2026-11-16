@@ -93,3 +93,11 @@ describe('POST /api/visit-summary: plain-language after-visit summary (ADR-011)'
     expect(res.body).toEqual({ status: 'crisis', help: CRISIS_HELP });
   });
 });
+
+describe('POST /api/visit-summary: action items (ADR-013)', () => {
+  it('returns action items from the transcript', async () => {
+    const res = await post({ transcript: THEO_SAMPLE_TRANSCRIPT, source: 'sample', patientName: 'Theo' });
+    expect(res.body.actionItems.map((i: { step: string }) => i.step)).toEqual(['Book a follow-up visit with Dr. Lane', 'Ask about feeling dizzy when you stand up']);
+    expect(res.body.actionItems[0]).toMatchObject({ owner: 'You', isVisit: true });
+  });
+});
