@@ -25,10 +25,14 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showReset, setShowReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const switchTo = (m: 'signup' | 'login') => {
     setError(null);
+    setConfirm('');
+    setShowReset(false);
     navigate(`/${m}`, { replace: true });
   };
 
@@ -39,6 +43,7 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
     if (mode === 'signup' && !lastName.trim()) return setError('Enter your last name.');
     if (!EMAIL_RE.test(em)) return setError('Enter a valid email address.');
     if (password.length < 8) return setError('Use at least 8 characters for your password.');
+    if (mode === 'signup' && password !== confirm) return setError('Those passwords don’t match. Type the same password in both fields.');
 
     // Sign-in server (Supabase, ADR-001) when it's set up; otherwise the on-device version below.
     if (isServerAuthEnabled()) {
@@ -81,12 +86,13 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   };
 
   return (
-    <PublicLayout header="minimal" footer={false}>
+    <PublicLayout footer={false}>
       <main id="main" className="auth">
         <section className="auth-side">
-          <h1>Free for you, always.</h1>
+          <h1>Free for you.</h1>
           <p className="pub-sub" style={{ fontSize: '1.05rem' }}>We never sell your data. You control who sees what.</p>
-          <div className="art" style={{ minHeight: 260 }}><PrivacyArt /></div>
+          {/* Placeholder until the final photo asset lands in /public. */}
+          <div className="art auth-art"><PrivacyArt /></div>
         </section>
 
         <section className="auth-form">
@@ -97,16 +103,16 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             </div>
 
             {mode === 'signup' && (
-              <div className="grid-2">
+              <>
                 <div className="field">
-                  <label htmlFor="first">First name</label>
-                  <input id="first" className="input" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  <label htmlFor="first">First Name</label>
+                  <input id="first" className="input" autoComplete="given-name" placeholder="John" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label htmlFor="last">Last name</label>
-                  <input id="last" className="input" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  <label htmlFor="last">Last Name</label>
+                  <input id="last" className="input" autoComplete="family-name" placeholder="Doe" value={lastName} onChange={(e) => setLastName(e.target.value)} />
                 </div>
-              </div>
+              </>
             )}
             <div className="field">
               <label htmlFor="email">Email</label>
@@ -117,7 +123,24 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
               <label htmlFor="password">Password</label>
               <input id="password" className="input" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 value={password} onChange={(e) => setPassword(e.target.value)} />
+              {mode === 'login' && (
+                <button type="button" className="btn btn--link auth-forgot" aria-expanded={showReset} aria-controls="reset-note" onClick={() => setShowReset((v) => !v)}>
+                  Forgot your password?
+                </button>
+              )}
             </div>
+            {mode === 'login' && showReset && (
+              <p id="reset-note" className="form-note" role="status">
+                Password reset isn’t available in this version yet. If you can’t remember your password, you’ll need to create a new account.
+              </p>
+            )}
+            {mode === 'signup' && (
+              <div className="field">
+                <label htmlFor="confirm">Confirm Password</label>
+                <input id="confirm" className="input" type="password" autoComplete="new-password"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-invalid={!!error && !!confirm && confirm !== password} />
+              </div>
+            )}
             {error && <p className="form-error" role="alert">{error}</p>}
 
             <button type="submit" disabled={busy} className="btn btn--lg btn--block btn--primary">
@@ -126,7 +149,7 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             <p className="form-note">
               By continuing you agree to the <Link to="/legal/terms">Terms</Link> and <Link to="/legal/privacy">Privacy policy</Link>.
             </p>
-            <p className="form-note">This version keeps your data on this device only.</p>
+            {!isServerAuthEnabled() && <p className="form-note">This version keeps your data on this device only.</p>}
           </form>
         </section>
       </main>
