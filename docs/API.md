@@ -273,6 +273,14 @@ under the Recap; it's the strongest line for the next visit). For a visit with o
 `src/lib/afterVisit/summary.ts` gives the same shape on the device. `POST /api/visit-summary` also returns `summary` (send
 `talkingPoints` to get `raised`), ready for when recording and transcription exist.
 
+## 2h. Suggested questions from goal + history (new, ADR-012)
+
+`suggestQuestions(state, visit, todayISO())` from `src/lib/questions/suggest.ts` → up to 5 `{ id, text, why }`, built only from the
+patient's own record (what wasn't covered last time, the timeline, what the last visit concluded, the plan). **Already wired** into your
+talking-points step: they come first in the `Priorities` suggestion chips. Ideas for you: show `why` under each (e.g. "Not covered at
+your visit on Nov 4."), relabel the chips "From your history", or give them their own "Questions to ask" list, since chips hide once
+a visit has 3 talking points (Theo's next visit does).
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
