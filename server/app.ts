@@ -35,6 +35,8 @@ import { runMapping } from './mapping/pipeline.js';
 import type { MappingEngine } from './mapping/types.js';
 import { parseStoryDraft } from './storyDraft.js';
 import { parseCaseInputs } from './caseInputs.js';
+import { parseSavedRecord } from './records/record.js';
+import { recordServiceFromEnv, type RecordService } from './records/service.js';
 import { buildCaseView } from '../src/lib/caseView/caseView.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
@@ -69,6 +71,9 @@ export type ApiErrorCode =
   | 'TEXT_TOO_LONG'
   | 'INVALID_RESULTS'
   | 'INVALID_CASE'
+  | 'INVALID_RECORD'
+  | 'NO_RECORD'
+  | 'RECORD_STORE_NOT_CONFIGURED'
   | 'INVALID_SHARE'
   | 'EMPTY_BRIEF'
   | 'SHARE_NOT_FOUND'
@@ -107,6 +112,9 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   SHARING_NOT_CONFIGURED: 'Sharing with your doctor isn’t set up on the server yet.',
   INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
   INVALID_CASE: 'Send a JSON object like { "medications": [], "evidence": [], "visits": [], "followUps": [] } using the app’s record fields (dates as YYYY-MM-DD).',
+  INVALID_RECORD: 'Send { "record": { ... the app’s record ... }, "baseVersion": n } (baseVersion 0 for the first save; record up to 512 KB).',
+  NO_RECORD: 'There’s no saved record for this account on the server yet.',
+  RECORD_STORE_NOT_CONFIGURED: 'Saving your record to the server isn’t set up yet. Everything stays on this device.',
   EMPTY_RESULTS: 'Add a lab result or a clinical note to explain first.',
   TEXT_TOO_LONG: `That’s more than we can explain at once (limit ${MAX_EXPLAIN_CHARS.toLocaleString('en-US')} characters).`,
   MALFORMED_JSON: 'The request body is not valid JSON.',
@@ -170,6 +178,7 @@ export function createApp({
   shares = shareStoreFromEnv(),
   notifier = shareNotifierFromEnv(),
   demo = demoSourceFromEnv(),
+  records = recordServiceFromEnv(),
   today = () => new Date().toISOString().slice(0, 10),
 }: {
   auth?: AuthConfig;
@@ -177,6 +186,8 @@ export function createApp({
   shares?: ShareStore;
   notifier?: ShareNotifier;
   demo?: DemoSource;
+  /** Encrypted record storage (server/records, ADR-018). Undefined = not configured (503). */
+  records?: RecordService;
   /** Today as YYYY-MM-DD (tests pass a fixed day). */
   today?: () => string;
 } = {}) {
@@ -453,6 +464,50 @@ export function createApp({
     return res.json({ status: 'ok', data: { ...data, profile: { ...(data.profile as object), ...(user.email ? { email: user.email } : {}) } }, isDemoAccount: demoAccount });
   });
 
+  // ---------------------------------------------------------------- the person's own record, encrypted (ADR-018)
+
+  const accountRequired = requireUser({ ...auth, required: true }, sendError);
+  const recordStore = (_req: Request, res: Response, next: NextFunction) => (records ? next() : sendError(res, 503, 'RECORD_STORE_NOT_CONFIGURED'));
+  const ownId = (res: Response) => (res.locals.user as AuthUser).id;
+
+  /**
+   * GET /api/me/record: the signed-in person's saved record, decrypted on the server for them only.
+   * 200 { status: "ok", record, version, updatedAt } · 404 NO_RECORD · 401 · 503 RECORD_STORE_NOT_CONFIGURED
+   */
+  api.get('/me/record', accountRequired, recordStore, async (_req, res) => {
+    const found = await records!.load(ownId(res));
+    if (!found) return sendError(res, 404, 'NO_RECORD');
+    return res.json({ status: 'ok', ...found });
+  });
+
+  /**
+   * PUT /api/me/record: save the whole record, encrypted (Visit store sync). Only saves if the stored version is still
+   * `baseVersion` (0 = first save), so two devices never silently overwrite each other.
+   * Body: { "record": {...}, "baseVersion": n }
+   * 200 { status: "ok", version, updatedAt } · 409 { status: "conflict", current: { record, version, updatedAt } | null }
+   * · 400 INVALID_RECORD · 403 DEMO_ACCOUNT_READ_ONLY · 401 · 413 · 415 · 503. Never logged.
+   */
+  api.put('/me/record', accountRequired, recordStore, async (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    if (isDemoAccount(res)) return sendError(res, 403, 'DEMO_ACCOUNT_READ_ONLY');
+    const body: unknown = req.body;
+    if (!isPlainObject(body)) return sendError(res, 400, 'INVALID_RECORD');
+    const base = body.baseVersion;
+    if (typeof base !== 'number' || !Number.isInteger(base) || base < 0 || base > 1_000_000_000) return sendError(res, 400, 'INVALID_RECORD');
+    const record = parseSavedRecord(body.record);
+    if (!record) return sendError(res, 400, 'INVALID_RECORD');
+    const out = await records!.save(ownId(res), record, base);
+    if (out.status === 'conflict') return res.status(409).json({ status: 'conflict', current: out.current });
+    return res.json({ status: 'ok', version: out.version, updatedAt: out.updatedAt });
+  });
+
+  /** DELETE /api/me/record: delete the server copy (sync turned off with "delete my server copy"). 204 · 404 NO_RECORD · 403 · 401 · 503 */
+  api.delete('/me/record', accountRequired, recordStore, async (_req, res) => {
+    if (isDemoAccount(res)) return sendError(res, 403, 'DEMO_ACCOUNT_READ_ONLY');
+    const deleted = await records!.remove(ownId(res));
+    return deleted ? res.status(204).end() : sendError(res, 404, 'NO_RECORD');
+  });
+
   // ---------------------------------------------------------------- sharing with the care team (ADR-009)
 
   const accountOnly = requireUser({ ...auth, required: true }, sendError);
@@ -541,7 +596,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/demo', '/demo/play-visit', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/case-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/demo/play-visit', '/me/app-data', '/me/record', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/case-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

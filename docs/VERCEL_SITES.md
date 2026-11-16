@@ -23,6 +23,7 @@ public password can't reach the project that holds real people's accounts.
 | `VITE_SUPABASE_ANON_KEY`, `SUPABASE_ANON_KEY` | **real** publishable key | **DEMO** publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **real** secret key | **DEMO** secret key. Add it together with Diana; never in chat |
 | `REQUIRE_AUTH` | `true` | `true` |
+| `RECORD_ENCRYPTION_KEY` | **its own** random key (`docs/SUPABASE_SETUP.md` step 10). Secret; back it up | *(leave out: Theo never saves, so saving stays off)* |
 
 ## Supabase settings (Authentication → Sign In / Providers)
 
