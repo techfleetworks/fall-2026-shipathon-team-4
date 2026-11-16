@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildTheoRecord } from '../../../server/demo/theoRecord.js';
 import { todayISO } from '../dates.js';
-import { buildCaseView, CASE_NOTE, MAX_HIGHLIGHTS, sameConcern, type CaseInputs, type CaseView } from './caseView.js';
+import { ENGINE_VOCABULARY } from '../engine.js';
+import { buildCaseView, CASE_NOTE, inDoctorTerms, MAX_HIGHLIGHTS, sameConcern, type CaseInputs, type CaseView } from './caseView.js';
 
 const TODAY = '2026-11-15';
 const EMPTY: CaseInputs = { medications: [], evidence: [], visits: [], followUps: [] };
@@ -14,7 +15,7 @@ const ev = (id: string, date: string, type: 'medication' | 'symptom' | 'visit' |
 
 describe('case view: honest about thin records', () => {
   it('a brand-new user gets no patterns, no highlights, and a count of 0', () => {
-    expect(view({})).toEqual({ enough: false, entries: 0, patterns: [], openQuestions: [], highlights: [], note: CASE_NOTE });
+    expect(view({})).toEqual({ enough: false, entries: 0, clinical: { presenting: [], course: [], medications: [] }, patterns: [], openQuestions: [], highlights: [], note: CASE_NOTE });
   });
 
   it('one dated entry is still not enough to compare', () => {
@@ -43,6 +44,7 @@ describe('case view: patterns', () => {
     expect(v.patterns).toEqual([{
       id: 'timing-s', kind: 'timing',
       text: 'Oct 4: "Trouble sleeping". That was 3 days after a medication change ("Sertraline started", Oct 1).',
+      clinical: 'Symptom onset Oct 4: "Trouble sleeping" (patient\'s words). Onset 3 days after medication change: Sertraline started (Oct 1). Temporal association only.',
       refs: [{ kind: 'evidence', id: 'm' }, { kind: 'evidence', id: 's' }],
     }]);
   });
@@ -75,7 +77,7 @@ describe('case view: patterns', () => {
       { id: 'v1', date: '2026-09-01', priorities: ['Headaches every morning since August'] },
       { id: 'v2', date: '2026-11-01', priorities: ['Morning headaches are worse'] },
     ] });
-    expect(v.patterns).toEqual([{ id: 'raised-v1-0', kind: 'raised-again', text: 'You\'ve brought up "Headaches every morning since August" at 2 visits (Sep 1, Nov 1).', refs: [{ kind: 'visit', id: 'v1' }, { kind: 'visit', id: 'v2' }] }]);
+    expect(v.patterns).toEqual([{ id: 'raised-v1-0', kind: 'raised-again', text: 'You\'ve brought up "Headaches every morning since August" at 2 visits (Sep 1, Nov 1).', clinical: 'Recurrent concern, 2 visits (Sep 1, Nov 1): "Headaches every morning since August" (patient\'s words).', refs: [{ kind: 'visit', id: 'v1' }, { kind: 'visit', id: 'v2' }] }]);
   });
 
   it('felt unheard at two visits is a pattern; at one visit it is not', () => {
@@ -108,7 +110,7 @@ describe('case view: open questions and highlights', () => {
 
   it('talking points that never came up at the last visit are open', () => {
     const v = view({ ...base, visits: [{ id: 'v', date: '2026-11-01', priorities: ['Dizzy', 'Sleep'], covered: ['Sleep'] }] });
-    expect(v.openQuestions).toEqual([{ id: 'not-covered-v-0', kind: 'not-covered', text: '"Dizzy" didn\'t come up yet.', why: 'It was a talking point for your visit on Nov 1.', refs: [{ kind: 'visit', id: 'v' }] }]);
+    expect(v.openQuestions).toEqual([{ id: 'not-covered-v-0', kind: 'not-covered', text: '"Dizzy" didn\'t come up yet.', why: 'It was a talking point for your visit on Nov 1.', clinical: 'Not addressed at visit Nov 1: Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing).', refs: [{ kind: 'visit', id: 'v' }] }]);
   });
 
   it('highlights keep the most recent few, oldest first', () => {
@@ -139,5 +141,45 @@ describe("case view: Theo's record", () => {
     expect(v.patterns.map((p) => p.kind)).toEqual(['timing', 'raised-again']);
     expect(v.patterns[0].text).toMatch(/"Daytime sleepiness and dizziness on standing began"\. That was 2 days after a medication change \("Ziprasidone dose increased"/);
     expect(v.highlights.map((h) => h.text)).toEqual(['Medication change: Ziprasidone dose increased', 'First symptom noted: Daytime sleepiness and dizziness on standing began', 'Visit with Dr. Lane · felt heard 2/5']);
+  });
+});
+
+describe('case view: in doctor terms (translation engine + record)', () => {
+  it("translates the patient's words with the reviewed pairs, and quotes them when no pair fits", () => {
+    expect(inDoctorTerms('so sleepy, and dizzy when I stand up')).toBe('Over-sedation / excessive daytime somnolence; Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing)');
+    expect(inDoctorTerms('Headaches')).toBe('"Headaches" (patient\'s words)');
+  });
+
+  it('every presenting term comes from the approved vocabulary (nothing invented)', () => {
+    const v = view(buildTheoRecord() as unknown as CaseInputs, todayISO());
+    expect(v.clinical.presenting.length).toBeGreaterThan(0);
+    for (const term of v.clinical.presenting) expect(ENGINE_VOCABULARY).toContain(term);
+  });
+
+  it("Theo's case: presenting symptoms from his story and timeline, course lines from his story, recorded medicine", () => {
+    const v = view(buildTheoRecord() as unknown as CaseInputs, todayISO());
+    expect(v.clinical.presenting).toEqual([
+      'Over-sedation / excessive daytime somnolence',
+      'Cognitive dulling ("brain fog")',
+      'Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing)',
+    ]);
+    expect(v.clinical.course[0]).toBe('Onset: 5 weeks, began after a medication change');
+    expect(v.clinical.course).toHaveLength(5);
+    expect(v.clinical.medications).toEqual([expect.stringMatching(/^Ziprasidone, dose increased \(recorded /)]);
+    expect(v.patterns[0].clinical).toMatch(/^Symptom onset .*: Over-sedation \/ excessive daytime somnolence; Orthostatic symptoms .*Onset 2 days after medication change: Ziprasidone dose increased .*Temporal association only\.$/);
+    expect(v.patterns[1].clinical).toMatch(/^Recurrent concern, 2 visits \(.*\): Over-sedation \/ excessive daytime somnolence\.$/);
+  });
+
+  it('uses only the latest saved story, and skips "Not discussed" lines', () => {
+    const older = { createdAt: '2026-09-01T00:00:00Z', opening: 'I feel numb', fields: [{ key: 'onset' as const, label: 'Onset', clinical: '> 6 months' }] };
+    const newer = { createdAt: '2026-10-01T00:00:00Z', opening: "my mind won't stop", fields: [{ key: 'onset' as const, label: 'Onset', clinical: '2–4 weeks' }, { key: 'triggers' as const, label: 'Triggers', clinical: 'Not discussed' }] };
+    const v = view({ evidence: [ev('a', '2026-10-01', 'note', 'x'), ev('b', '2026-10-02', 'note', 'y')], summaries: [newer, older] });
+    expect(v.clinical.presenting).toEqual(['Racing thoughts']);
+    expect(v.clinical.course).toEqual(['Onset: 2–4 weeks']);
+  });
+
+  it('a medicine not started yet is not listed', () => {
+    const v = view({ evidence: [ev('a', '2026-10-01', 'note', 'x'), ev('b', '2026-10-02', 'note', 'y')], medications: [{ id: 'm', name: 'Later', dose: '', started: '2026-12-01' }] });
+    expect(v.clinical.medications).toEqual([]);
   });
 });

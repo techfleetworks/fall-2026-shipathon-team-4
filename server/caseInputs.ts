@@ -4,12 +4,15 @@
  * (the route answers 400 INVALID_CASE). Unknown fields are dropped, never stored or logged.
  */
 import type { CaseInputs } from '../src/lib/caseView/caseView.js';
-import type { EvidenceType, FollowUp } from '../src/lib/types.js';
+import type { EvidenceType, FieldKey, FollowUp } from '../src/lib/types.js';
 
 export const MAX_CASE_ITEMS = 500;
 export const MAX_CASE_TEXT = 2000;
 export const MAX_PRIORITIES = 10;
 
+/** Only the latest story is read; older ones are accepted so the app can send its record as-is. */
+export const MAX_SUMMARIES = 50;
+const FIELD_KEYS: readonly FieldKey[] = ['symptoms', 'onset', 'frequency', 'severity', 'triggers', 'tried'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EVIDENCE_TYPES: readonly EvidenceType[] = ['visit', 'medication', 'symptom', 'note', 'follow-up'];
 const OUTCOMES: readonly NonNullable<FollowUp['outcome']>[] = ['Happened', 'Not yet', 'Didn’t happen'];
@@ -76,6 +79,17 @@ export function parseCaseInputs(body: unknown): CaseInputs | undefined {
         if (f.outcome !== undefined && !OUTCOMES.includes(f.outcome as NonNullable<FollowUp['outcome']>)) throw new Invalid();
         return { id: str(f.id, { max: 64 }), step: str(f.step, { max: 300 }), dueDate: date(f.dueDate), outcome: f.outcome as FollowUp['outcome'] };
       }),
+      summaries: list(body.summaries, (s) => {
+        if (typeof s.createdAt !== 'string' || Number.isNaN(Date.parse(s.createdAt)) || s.createdAt.length > 40) throw new Invalid();
+        return {
+          createdAt: s.createdAt,
+          opening: str(s.opening, { optional: true }),
+          fields: list(s.fields, (f) => {
+            if (!FIELD_KEYS.includes(f.key as FieldKey)) throw new Invalid();
+            return { key: f.key as FieldKey, label: str(f.label, { max: 60 }), clinical: str(f.clinical, { max: 600 }), quote: str(f.quote, { optional: true, max: 600 }) || undefined };
+          }, FIELD_KEYS.length),
+        };
+      }, MAX_SUMMARIES),
     };
   } catch (e) {
     if (e instanceof Invalid) return undefined;

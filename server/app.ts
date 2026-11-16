@@ -334,8 +334,8 @@ export function createApp({
   });
 
   /**
-   * POST /api/case-summary: patterns across visits, from the patient's own dated record (ADR-017). Free: no AI.
-   * Body: { "medications"?, "evidence"?, "visits"?, "followUps"? } (the app's record fields; see docs/API.md 2l)
+   * POST /api/case-summary: the translation engine run over the patient's record, to build a clinically legible case (ADR-017). Free: no AI.
+   * Body: { "medications"?, "evidence"?, "visits"?, "followUps"?, "summaries"? } (the app's record fields; see docs/API.md 2l)
    * 200 { status: "ok", caseView, disclaimer } (caseView.enough is false with fewer than 2 dated entries)
    * 200 { status: "crisis", help } (nothing built) · 400 INVALID_CASE · 415. Nothing is stored or logged.
    */

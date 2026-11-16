@@ -1,8 +1,13 @@
 /**
- * Case view: patterns across visits, built from the patient's own dated record (board card "Clinically-legible
- * case view", ADR-017). Same engine on the device (My history) and on the server (POST /api/case-summary).
+ * Case view: the translation engine run over the patient's record, to build a credible, clinically legible case
+ * (board card "Credible, clinically-legible 'case' view from history + symptoms", ADR-017). Same engine on the device
+ * (My history) and on the server (POST /api/case-summary).
  *
- * What it finds (every item points back to the entries it came from, so nothing is invented):
+ * Every item has two lines: `text` in the patient's plain words, and `clinical`, what the doctor reads. Clinical terms
+ * come only from the app's translation engine (translate.ts → matchSymptoms, the reviewed plain → clinical pairs); when no
+ * pair matches, the patient's own words are quoted instead. Nothing is invented.
+ *
+ * What it finds (every item points back to the entries it came from):
  *   Patterns (need two or more entries to exist):
  *     timing         a symptom entry began 0–60 days after a medication change
  *     raised-again   the same concern was a talking point at two or more visits
@@ -11,15 +16,19 @@
  *     overdue        a next step whose due date passed with no outcome, or that "didn't happen"
  *     not-covered    a past visit's talking point that never came up (after-visit summary or "covered" ticks)
  *   Highlights: medication changes, the first symptom entry, and past visits, in date order (the last few).
+ *   Clinical overview: presenting symptoms (translation engine over the latest story and symptom entries), the story's
+ *     course lines (onset, frequency, severity, triggers, tried) and recorded medications.
  *
  * Honest about thin records: with fewer than two dated entries `enough` is false and every list is empty,
  * so a new user is never shown made-up patterns. Timing only, never cause: no item says a medicine caused
  * anything, names a condition, or gives advice (the guardrail checks run on every line as a backstop).
  * Free and rule-based. A Claude engine can replace it later behind the same shape.
  */
+import { ENGINE_VOCABULARY } from '../engine.js';
 import { checkOutput } from '../guardrails/checks.js';
 import { hasCrisisLanguage } from '../safety.js';
-import type { Evidence, FollowUp, Medication, Visit } from '../types.js';
+import { matchSymptoms } from '../translate.js';
+import type { CaseSummary, Evidence, FieldKey, FollowUp, Medication, Visit } from '../types.js';
 
 export type CaseRefKind = 'evidence' | 'medication' | 'visit' | 'followUp';
 export interface CaseRef { kind: CaseRefKind; id: string }
@@ -27,7 +36,10 @@ export interface CaseRef { kind: CaseRefKind; id: string }
 export interface CasePattern {
   id: string;
   kind: 'timing' | 'raised-again' | 'felt-unheard';
+  /** Plain words, for the patient. */
   text: string;
+  /** What the doctor reads (clinical terms from the translation engine). */
+  clinical: string;
   refs: CaseRef[];
 }
 
@@ -36,13 +48,24 @@ export interface CaseOpenQuestion {
   kind: 'overdue' | 'not-covered';
   text: string;
   why: string;
+  clinical: string;
   refs: CaseRef[];
 }
 
 export interface CaseHighlight {
   date: string; // YYYY-MM-DD
   text: string;
+  clinical: string;
   ref: CaseRef;
+}
+
+export interface CaseClinical {
+  /** Presenting symptoms in clinical terms (translation engine over the latest story and the symptom entries). */
+  presenting: string[];
+  /** The latest saved story's course lines, e.g. "Onset: 5 weeks, began after a medication change". */
+  course: string[];
+  /** Medications as recorded, e.g. "Ziprasidone, dose increased (recorded Oct 11)". */
+  medications: string[];
 }
 
 export interface CaseView {
@@ -50,6 +73,7 @@ export interface CaseView {
   enough: boolean;
   /** Dated entries counted (timeline entries + past visits + medicines not already on the timeline). */
   entries: number;
+  clinical: CaseClinical;
   patterns: CasePattern[];
   openQuestions: CaseOpenQuestion[];
   highlights: CaseHighlight[];
@@ -69,6 +93,8 @@ export interface CaseInputs {
     afterVisit?: { talkingPoints: readonly { text: string; raised: boolean }[] };
   })[];
   followUps: readonly Pick<FollowUp, 'id' | 'step' | 'dueDate' | 'outcome'>[];
+  /** Saved stories (doctor-ready summaries). Only the latest is read. Optional: older clients don't send it. */
+  summaries?: readonly (Pick<CaseSummary, 'createdAt' | 'opening'> & { fields: readonly { key: FieldKey; label: string; clinical: string; quote?: string }[] })[];
 }
 
 export const MIN_ENTRIES = 2;
@@ -78,6 +104,8 @@ export const MAX_HIGHLIGHTS = 6;
 /** How long after a medication change a new symptom still counts as "after the change". */
 export const TIMING_WINDOW_DAYS = 60;
 export const CASE_NOTE = 'These come from the dates in your own record. They show timing, not cause. Your doctor can help explain what they mean.';
+/** Course lines taken from the story, in this order. Symptoms are rebuilt by the translation engine instead. */
+const COURSE_KEYS: readonly FieldKey[] = ['onset', 'frequency', 'severity', 'triggers', 'tried'];
 
 const shortDate = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const daysApart = (a: string, b: string) => Math.round((Date.parse(`${b.slice(0, 10)}T00:00:00Z`) - Date.parse(`${a.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
@@ -87,6 +115,12 @@ const words = (s: string) => new Set((s.toLowerCase().match(/[a-z]{4,}/g) ?? [])
 /** "Story saved" entries repeat the story; they are not a new symptom starting. */
 const isStoryEntry = (e: Evidence) => /^story saved$/i.test(e.title.trim());
 const clip = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+
+/** The patient's words in doctor terms, or quoted as-is when the translation engine has no pair for them. */
+export function inDoctorTerms(plain: string): string {
+  const terms = matchSymptoms(plain);
+  return terms.length ? terms.join('; ') : `"${clip(plain)}" (patient's words)`;
+}
 
 /** Two talking points are "the same concern" when they share at least two content words and half of the shorter one. */
 export function sameConcern(a: string, b: string): boolean {
@@ -107,13 +141,29 @@ function medicationChanges(input: CaseInputs): MedChange[] {
   return [...fromTimeline, ...fromList].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const latestStory = (input: CaseInputs) => [...(input.summaries ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+
 function patientText(input: CaseInputs): string[] {
   return [
     ...input.evidence.flatMap((e) => [e.title, e.detail]),
     ...input.medications.flatMap((m) => [m.name, m.dose, m.note ?? '']),
     ...input.visits.flatMap((v) => [v.clinician ?? '', ...v.priorities, ...(v.covered ?? [])]),
     ...input.followUps.map((f) => f.step),
+    ...(input.summaries ?? []).flatMap((s) => [s.opening, ...s.fields.flatMap((f) => [f.clinical, f.quote ?? ''])]),
   ];
+}
+
+function clinicalOverview(input: CaseInputs, symptoms: readonly Evidence[], today: string): CaseClinical {
+  const story = latestStory(input);
+  const storyWords = story ? [story.opening, ...story.fields.map((f) => f.quote ?? '')].join(' ') : '';
+  const presenting = matchSymptoms([storyWords, ...symptoms.map((e) => e.detail)].join(' '));
+  const course = story
+    ? COURSE_KEYS.map((k) => story.fields.find((f) => f.key === k)).filter((f) => f && f.clinical !== 'Not discussed').map((f) => `${f!.label}: ${f!.clinical}`)
+    : [];
+  const medications = input.medications
+    .filter((m) => m.started <= today)
+    .map((m) => `${[m.name, m.dose].filter(Boolean).join(', ')} (recorded ${shortDate(m.started)})`);
+  return { presenting, course, medications };
 }
 
 export function buildCaseView(input: CaseInputs, today: string): CaseViewResult {
@@ -124,8 +174,10 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
   const meds = medicationChanges(input);
   const pastEvidence = input.evidence.filter((e) => e.date <= today);
   const entries = pastEvidence.length + pastVisits.length + meds.filter((m) => m.ref.kind === 'medication' && m.date <= today).length;
-  const empty: CaseView = { enough: false, entries, patterns: [], openQuestions: [], highlights: [], note: CASE_NOTE };
-  if (entries < MIN_ENTRIES) return { status: 'ok', view: empty };
+  const note = CASE_NOTE;
+  if (entries < MIN_ENTRIES) {
+    return { status: 'ok', view: { enough: false, entries, clinical: { presenting: [], course: [], medications: [] }, patterns: [], openQuestions: [], highlights: [], note } };
+  }
 
   const patterns: CasePattern[] = [];
   const symptoms = pastEvidence.filter((e) => e.type === 'symptom' && !isStoryEntry(e)).sort((a, b) => a.date.localeCompare(b.date));
@@ -140,6 +192,7 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
       id: `timing-${s.id}`,
       kind: 'timing',
       text: `${shortDate(s.date)}: "${clip(s.detail || s.title)}". That was ${when} a medication change ("${clip(m.label, 60)}", ${shortDate(m.date)}).`,
+      clinical: `Symptom onset ${shortDate(s.date)}: ${inDoctorTerms(s.detail || s.title)}. Onset ${n === 0 ? 'same day as' : `${plural(n, 'day')} after`} medication change: ${clip(m.label, 60)} (${shortDate(m.date)}). Temporal association only.`,
       refs: [m.ref, { kind: 'evidence', id: s.id }],
     });
   }
@@ -156,10 +209,12 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
       used.add(key);
       for (const o of repeats) o.priorities.filter((q) => sameConcern(p, q)).forEach((q) => used.add(`${o.id}:${q}`));
       const all = [v, ...repeats];
+      const dates = all.map((x) => shortDate(x.date)).join(', ');
       patterns.push({
         id: `raised-${v.id}-${patterns.length}`,
         kind: 'raised-again',
-        text: `You've brought up "${clip(p)}" at ${plural(all.length, 'visit')} (${all.map((x) => shortDate(x.date)).join(', ')}).`,
+        text: `You've brought up "${clip(p)}" at ${plural(all.length, 'visit')} (${dates}).`,
+        clinical: `Recurrent concern, ${plural(all.length, 'visit')} (${dates}): ${inDoctorTerms(p)}.`,
         refs: all.map((x) => ({ kind: 'visit', id: x.id })),
       });
     }
@@ -168,10 +223,12 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
   // Felt unheard more than once.
   const unheard = pastVisits.filter((v) => v.checkIn && v.checkIn.feltHeard <= 2);
   if (unheard.length >= 2) {
+    const dates = unheard.map((v) => shortDate(v.date)).join(', ');
     patterns.push({
       id: 'felt-unheard',
       kind: 'felt-unheard',
-      text: `You felt heard 2 out of 5 or less at ${plural(unheard.length, 'visit')} (${unheard.map((v) => shortDate(v.date)).join(', ')}).`,
+      text: `You felt heard 2 out of 5 or less at ${plural(unheard.length, 'visit')} (${dates}).`,
+      clinical: `Patient-rated "felt heard" 2/5 or lower at ${plural(unheard.length, 'visit')} (${dates}).`,
       refs: unheard.map((v) => ({ kind: 'visit', id: v.id })),
     });
   }
@@ -187,6 +244,7 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
       kind: 'overdue',
       text: `"${clip(f.step, 60)}": what happens next?`,
       why: missed ? `You logged that it didn't happen (it was due ${shortDate(f.dueDate)}).` : `It was due ${shortDate(f.dueDate)} and isn't marked done.`,
+      clinical: `Outstanding follow-up: ${clip(f.step, 60)}; due ${shortDate(f.dueDate)}, ${missed ? 'patient reports it did not happen' : 'no outcome recorded'}.`,
       refs: [{ kind: 'followUp', id: f.id }],
     });
   }
@@ -203,18 +261,21 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
         kind: 'not-covered',
         text: `"${clip(p)}" didn't come up yet.`,
         why: `It was a talking point for your visit on ${shortDate(lastVisit.date)}.`,
+        clinical: `Not addressed at visit ${shortDate(lastVisit.date)}: ${inDoctorTerms(p)}.`,
         refs: [{ kind: 'visit', id: lastVisit.id }],
       });
     }
   }
 
   // Highlights: medication changes, the first symptom, past visits. Keep the most recent few, oldest first.
+  const first = symptoms[0];
   const highlights: CaseHighlight[] = [
-    ...meds.filter((m) => m.date <= today).map((m) => ({ date: m.date, text: `Medication change: ${clip(m.label, 60)}`, ref: m.ref })),
-    ...(symptoms[0] ? [{ date: symptoms[0].date, text: `First symptom noted: ${clip(symptoms[0].detail || symptoms[0].title, 70)}`, ref: { kind: 'evidence', id: symptoms[0].id } as CaseRef }] : []),
+    ...meds.filter((m) => m.date <= today).map((m) => ({ date: m.date, text: `Medication change: ${clip(m.label, 60)}`, clinical: `Medication change: ${clip(m.label, 60)}`, ref: m.ref })),
+    ...(first ? [{ date: first.date, text: `First symptom noted: ${clip(first.detail || first.title, 70)}`, clinical: `Symptom onset: ${inDoctorTerms(first.detail || first.title)}`, ref: { kind: 'evidence', id: first.id } as CaseRef }] : []),
     ...pastVisits.map((v) => ({
       date: v.date,
       text: `Visit${v.clinician ? ` with ${v.clinician}` : ''}${v.checkIn ? ` · felt heard ${v.checkIn.feltHeard}/5` : ''}`,
+      clinical: `Visit${v.clinician ? ` (${v.clinician})` : ''}${v.checkIn ? `; patient-rated felt heard ${v.checkIn.feltHeard}/5` : ''}`,
       ref: { kind: 'visit', id: v.id } as CaseRef,
     })),
   ]
@@ -222,18 +283,21 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
     .slice(-MAX_HIGHLIGHTS);
 
   // Backstop: drop any line that breaks a guardrail rule (no diagnosis, no advice, no new medicine names).
-  const input_ = texts.join('\n');
-  const safe = (line: string) => checkOutput(line, { input: input_ }).ok;
+  // Clinical lines may use the translation engine's approved vocabulary.
+  const ctx = { input: texts.join('\n'), approvedVocabulary: ENGINE_VOCABULARY };
+  const safe = (...lines: string[]) => lines.every((line) => checkOutput(line, ctx).ok);
+  const clinical = clinicalOverview(input, symptoms, today);
 
   return {
     status: 'ok',
     view: {
       enough: true,
       entries,
-      patterns: patterns.filter((p) => safe(p.text)).slice(0, MAX_PATTERNS),
-      openQuestions: open.filter((q) => safe(q.text) && safe(q.why)).slice(0, MAX_OPEN_QUESTIONS),
-      highlights: highlights.filter((h) => safe(h.text)),
-      note: CASE_NOTE,
+      clinical: { presenting: clinical.presenting.filter((l) => safe(l)), course: clinical.course.filter((l) => safe(l)), medications: clinical.medications.filter((l) => safe(l)) },
+      patterns: patterns.filter((p) => safe(p.text, p.clinical)).slice(0, MAX_PATTERNS),
+      openQuestions: open.filter((q) => safe(q.text, q.why, q.clinical)).slice(0, MAX_OPEN_QUESTIONS),
+      highlights: highlights.filter((h) => safe(h.text, h.clinical)),
+      note,
     },
   };
 }

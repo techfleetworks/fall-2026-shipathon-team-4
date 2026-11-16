@@ -1,6 +1,7 @@
 /**
  * "Patterns across visits" panel for My history (board card "Clinically-legible case view", ADR-017).
- * Runs the case-view engine on this device, from the record already here (nothing is sent anywhere).
+ * Runs the case-view engine on this device, from the record already here (nothing is sent anywhere). Each pattern and open
+ * item shows the patient's plain line and, under it, what the doctor reads (clinical terms from the translation engine).
  * Uses Diana's existing panel / list classes only. All wording here is a first draft for Diana and Product to edit.
  */
 import { useMemo } from 'react';
@@ -9,12 +10,21 @@ import { buildCaseView, MIN_ENTRIES } from '../lib/caseView/caseView';
 import { formatShort, todayISO } from '../lib/dates';
 import { useApp } from '../lib/store';
 
+/** The same item in clinical terms (translation engine), under the plain line. */
+function DoctorReads({ text }: { text: string }) {
+  return <span className="small muted" style={{ display: 'block', marginTop: 4 }}><strong>Your doctor reads:</strong> {text}</span>;
+}
+
 export function CasePatterns() {
   const medications = useApp((s) => s.medications);
   const evidence = useApp((s) => s.evidence);
   const visits = useApp((s) => s.visits);
   const followUps = useApp((s) => s.followUps);
-  const result = useMemo(() => buildCaseView({ medications, evidence, visits, followUps }, todayISO()), [medications, evidence, visits, followUps]);
+  const summaries = useApp((s) => s.summaries);
+  const result = useMemo(
+    () => buildCaseView({ medications, evidence, visits, followUps, summaries }, todayISO()),
+    [medications, evidence, visits, followUps, summaries],
+  );
 
   return (
     <section className="panel" aria-labelledby="cp" style={{ marginTop: 24 }}>
@@ -38,7 +48,14 @@ export function CasePatterns() {
           )}
           {result.view.patterns.length > 0 && (
             <ul className="found" aria-label="Patterns">
-              {result.view.patterns.map((p) => <li key={p.id}><span>{p.text}</span></li>)}
+              {result.view.patterns.map((p) => (
+                <li key={p.id}>
+                  <span>
+                    {p.text}
+                    <DoctorReads text={p.clinical} />
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
           {result.view.openQuestions.length > 0 && (
@@ -46,7 +63,12 @@ export function CasePatterns() {
               <strong>Still open</strong>
               <ul className="found" aria-label="Still open">
                 {result.view.openQuestions.map((q) => (
-                  <li key={q.id}><span>{q.text} <span className="small muted">{q.why}</span></span></li>
+                  <li key={q.id}>
+                    <span>
+                      {q.text} <span className="small muted">{q.why}</span>
+                      <DoctorReads text={q.clinical} />
+                    </span>
+                  </li>
                 ))}
               </ul>
             </>

@@ -1,6 +1,7 @@
-# Feature index entry: case view, patterns across visits (board card "Clinically-legible case view", ADR-017).
-# Audience: patient reviewing their history (My history), and a brand-new real user with an empty history.
-# Every item comes from the patient's own dated entries and points back to them. Timing only, never cause.
+# Feature index entry: case view (board card "Credible, clinically-legible 'case' view from history + symptoms", ADR-017):
+# the translation engine run over the record to build a case the doctor can read.
+# Audience: patient reviewing their history (My history), the clinician reading the case, and a brand-new real user
+# with an empty history. Every item comes from the patient's own dated entries and points back to them. Timing only, never cause.
 # Scenarios call buildCaseView directly (the My history panel runs the same function on the device).
 
 @feature:case-view
@@ -19,6 +20,18 @@ Feature: Patterns across my visits, from my own dates
   Scenario: A concern raised at more than one visit is shown
     When the case view is built for Theo
     Then a pattern says "at 2 visits"
+
+  @audience:patient @audience:clinician @usecase:cv-doctor-terms @category:happy-path @quality:functional @severity:high
+  Scenario: The case is written in doctor terms by the translation engine
+    When the case view is built for Theo
+    Then the doctor reads the timing pattern as "Over-sedation / excessive daytime somnolence"
+    And the presenting symptoms include "Orthostatic symptoms — dizziness on standing (possible low blood pressure on standing)"
+    And every presenting symptom comes from the approved vocabulary
+
+  @audience:clinician @usecase:cv-patient-words @category:edge @quality:functional @severity:medium
+  Scenario: Words the translation engine has no pair for are quoted, not guessed
+    When the case view is built for a medication change on "2026-10-01" and a symptom on "2026-10-03" called "Headaches"
+    Then the doctor reads the timing pattern as "\"Headaches\" (patient's words)"
 
   @audience:new-user @usecase:cv-empty @category:empty @quality:functional @severity:high
   Scenario: A brand-new user sees an honest empty state, not made-up patterns
