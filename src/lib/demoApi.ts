@@ -5,6 +5,7 @@
  * never sent back to the server.
  */
 import { jsonHeaders } from './api';
+import type { AfterVisitSummary } from './afterVisit/summary';
 import type { AppData } from './store';
 
 export const DEMO_TIMEOUT_MS = 3000;
@@ -49,6 +50,36 @@ export async function fetchMyAppData({ fetchImpl = fetch, timeoutMs = DEMO_TIMEO
     const body: unknown = await res.json();
     if (!isObj(body) || body.status !== 'ok' || !isObj(body.data) || !isObj(body.data.profile)) return undefined;
     return { data: body.data as Partial<AppData>, isDemoAccount: body.isDemoAccount === true };
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * "Play Theo's visit" (demo, At the visit): the server summarizes Theo's synthetic transcript as if this visit had
+ * been recorded (POST /api/demo/play-visit, no sign-in). Returns the summary, or undefined if the server can't be
+ * reached. Never throws.
+ */
+export async function playDemoVisit(
+  talkingPoints: readonly string[],
+  { fetchImpl = fetch, timeoutMs = DEMO_TIMEOUT_MS }: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+): Promise<AfterVisitSummary | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl('/api/demo/play-visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ talkingPoints: talkingPoints.slice(0, 3) }),
+      signal: controller.signal,
+    });
+    if (res.status !== 200) return undefined;
+    const body: unknown = await res.json();
+    const s = isObj(body) && body.status === 'ok' && isObj(body.summary) ? body.summary : undefined;
+    const lists = ['youRaised', 'doctorSaid', 'plan', 'notCovered', 'promised', 'talkingPoints'];
+    return s && lists.every((k) => Array.isArray(s[k])) ? (s as unknown as AfterVisitSummary) : undefined;
   } catch {
     return undefined;
   } finally {

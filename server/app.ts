@@ -19,6 +19,7 @@ import { MAX_EXPLAIN_CHARS, explainClinical } from '../src/lib/explain/explain.j
 import { LABS_NOTE, MAX_LAB_FIELD_CHARS, MAX_LAB_ROWS, type LabRow } from '../src/lib/labs/labs.js';
 import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
+import { THEO_SAMPLE_TRANSCRIPT } from '../src/data/sampleTranscript.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
 import { summarizeNotes, summarizeVisit } from '../src/lib/afterVisit/summary.js';
 import { extractActionItems } from '../src/lib/afterVisit/actionItems.js';
@@ -398,6 +399,26 @@ export function createApp({
   const isDemoAccount = (res: Response) => (res.locals.user as AuthUser | undefined)?.role === 'public-demo';
 
   /**
+   * POST /api/demo/play-visit: "Play Theo's visit" in the demo's At-the-visit step (ADR-015). Public, no sign-in:
+   * it only ever summarizes the server's own copy of Theo's synthetic transcript (transcript.txt), as if his visit had
+   * been recorded. Visitors can't send any text except up to 3 talking points (to tick the ones that came up).
+   * Body: { "talkingPoints"?: string[] } · 200 { status: "ok", summary, label } · 400 · 415
+   */
+  api.post('/demo/play-visit', (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body ?? {};
+    const talkingPoints = isPlainObject(body) ? body.talkingPoints ?? [] : null;
+    if (!Array.isArray(talkingPoints) || talkingPoints.length > 3 || !talkingPoints.every((p) => typeof p === 'string' && p.length <= 300)) {
+      return sendError(res, 400, 'INVALID_INPUT');
+    }
+    const intake = processTranscript(THEO_SAMPLE_TRANSCRIPT, 'sample');
+    const out = intake.status === 'accepted' ? summarizeVisit(intake.payload, { patientName: 'Theo', talkingPoints }) : null;
+    if (out?.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+    if (out?.status !== 'ok') return sendError(res, 500, 'INTERNAL');
+    return res.json({ status: 'ok', summary: out.summary, label: SYNTHETIC_LABEL });
+  });
+
+  /**
    * GET /api/me/app-data: the signed-in account's app data on the server (ADR-010). Used when Theo logs in:
    * his record is returned with dates moved to today, like the public demo. 200 { status: "ok", data, isDemoAccount }
    * · 404 NO_APP_DATA (normal for real users until the Visit store sync exists) · 401 · 503
@@ -501,7 +522,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/demo', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/demo/play-visit', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

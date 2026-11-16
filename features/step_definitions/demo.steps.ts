@@ -124,3 +124,19 @@ Then('the server refuses because it is the shared demo account', function (this:
   assert.equal(this.res?.body.error.code, 'DEMO_ACCOUNT_READ_ONLY');
   assert.equal(this.deleted, false);
 });
+
+// ---- "Play Theo's visit"
+
+When('a visitor plays Theo\'s visit and also sends the text {string}', async function (this: World, text: string) {
+  const locked = createApp({ auth: { required: true, verifyToken: async () => null } });
+  this.res = await request(locked).post('/api/demo/play-visit').send({ talkingPoints: [], transcript: text, notes: text });
+});
+
+Then('they get the plain summary of Theo\'s visit', function (this: World) {
+  assert.equal(this.res?.status, 200);
+  assert.ok(this.res?.body.summary.doctorSaid.includes('The doctor thinks this is from the depression.'));
+});
+
+Then('nothing they sent appears in it', function (this: World) {
+  assert.ok(!/Evil|stop taking/.test(JSON.stringify(this.res?.body)));
+});

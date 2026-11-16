@@ -295,6 +295,13 @@ visit with quick notes (typed or from live capture), it calls `POST /api/notes-s
 isn't one), ticks covered talking points, and adds the action items to Next steps. Doctor tasks are named like your step ideas
 ("Blood test", "Referral to a therapist").
 
+## 2k. "Play Theo's visit" in the demo (new, ADR-015)
+
+In demo mode, **At the visit** now shows a small "Demo" panel with **▶ Play Theo's visit (sample recording)** (above "Visit's over —
+go to recap"). One click: the server summarizes Theo's synthetic transcript as if the visit was recorded
+(`POST /api/demo/play-visit`, no sign-in), the visit's Recap, ✓ talking points and Next steps fill in, and the app opens After.
+Real users never see it. **Please check the placement and wording**: it's `PlayTheosVisit` in `src/screens/visit/At.tsx`.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
