@@ -7,6 +7,7 @@ import { SYNTHETIC_LABEL } from './transcript/constants';
 import { intakeError } from './transcript/intake';
 import type { TranscriptPayload, TranscriptSource } from './transcript/types';
 import type { StoryDraft, SummaryField } from './types';
+import type { AfterVisitSummary } from './afterVisit/summary';
 import type { Explanation } from './explain/explain';
 import type { LabExplanation, LabRow } from './labs/labs';
 
@@ -194,6 +195,47 @@ export async function requestResultsExplanation(
   ) {
     return { status: 'ok', labs: b.labs, note: b.note, labsNote: b.labsNote };
   }
+  if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
+  if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };
+  if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {
+    const e = b.error as Record<string, unknown>;
+    if (typeof e.code === 'string' && typeof e.message === 'string') return { status: 'rejected', error: { code: e.code, message: e.message } };
+  }
+  return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+}
+
+// ---------------------------------------------------------------- POST /api/notes-summary
+
+export type NotesSummaryOutcome =
+  | { status: 'ok'; summary: AfterVisitSummary }
+  | { status: 'crisis' }
+  | { status: 'blocked'; message: string }
+  | { status: 'rejected'; error: { code: string; message: string } }
+  | { status: 'unavailable'; message: string };
+
+/** A real user's visit notes → plain-language after-visit summary, on the server. Never throws. */
+export async function requestNotesSummary(
+  notes: string,
+  talkingPoints: readonly string[],
+  { signal, fetchImpl = fetch }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): Promise<NotesSummaryOutcome> {
+  let res: Response;
+  try {
+    res = await fetchImpl('/api/notes-summary', { method: 'POST', headers: await jsonHeaders(), body: JSON.stringify({ notes, talkingPoints: talkingPoints.slice(0, 3) }), signal });
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  if (res.status === 401) return { status: 'rejected', error: { code: 'UNAUTHORIZED', message: SIGNED_OUT_MESSAGE } };
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return { status: 'unavailable', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const s = b.summary as Record<string, unknown> | undefined;
+  const lists = ['youRaised', 'doctorSaid', 'plan', 'notCovered', 'promised', 'talkingPoints'];
+  if (res.status === 200 && b.status === 'ok' && s && lists.every((k) => Array.isArray(s[k]))) return { status: 'ok', summary: s as unknown as AfterVisitSummary };
   if (res.status === 200 && b.status === 'crisis') return { status: 'crisis' };
   if (res.status === 200 && b.status === 'blocked' && typeof b.message === 'string') return { status: 'blocked', message: b.message };
   if (res.status === 400 && typeof b.error === 'object' && b.error !== null) {

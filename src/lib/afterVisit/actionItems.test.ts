@@ -36,7 +36,7 @@ describe('extractActionItems', () => {
     const items = extractActionItems(summaryOf(SAM, 'Sam'), { visitDate: '2026-11-13', clinician: 'Dr. Kim' });
     expect(items).toEqual([
       { step: 'Book a follow-up visit with Dr. Kim', owner: 'You', dueDate: '2026-11-27', isVisit: true, why: 'Plan from your visit on Nov 13: check again in two weeks.' },
-      { step: 'Run a thyroid panel and an ECG', owner: 'Dr. Kim', dueDate: '2026-11-27', isVisit: false, why: 'The doctor said they would do this on Nov 13.' },
+      { step: 'Thyroid panel and an ECG', owner: 'Dr. Kim', dueDate: '2026-11-27', isVisit: false, why: 'The doctor said they would do this on Nov 13.' },
       { step: 'Ask about feeling dizzy when you stand up', owner: 'You', dueDate: '2026-11-27', isVisit: false, why: 'Not covered at your visit on Nov 13.' },
     ]);
   });
@@ -54,8 +54,8 @@ describe('extractActionItems', () => {
   });
 
   it('skips items already saved as follow-ups', () => {
-    const existing: Pick<FollowUp, 'step' | 'dueDate' | 'isVisit'>[] = [{ step: 'Run a thyroid panel and an ECG', dueDate: '2026-11-20', isVisit: false }];
-    expect(extractActionItems(summaryOf(SAM, 'Sam'), { visitDate: '2026-11-13', clinician: 'Dr. Kim', existing }).map((i) => i.step)).not.toContain('Run a thyroid panel and an ECG');
+    const existing: Pick<FollowUp, 'step' | 'dueDate' | 'isVisit'>[] = [{ step: 'Thyroid panel and an ECG', dueDate: '2026-11-20', isVisit: false }];
+    expect(extractActionItems(summaryOf(SAM, 'Sam'), { visitDate: '2026-11-13', clinician: 'Dr. Kim', existing }).map((i) => i.step)).not.toContain('Thyroid panel and an ECG');
   });
 
   it('invents nothing when the visit set no plan and promised nothing', () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { Then, When } from '@cucumber/cucumber';
+import { Given, Then, When } from '@cucumber/cucumber';
 import { THEO_SAMPLE_TRANSCRIPT } from '../../src/data/sampleTranscript.js';
 import { summarizeNotes, summarizeVisit, type AfterVisitResult } from '../../src/lib/afterVisit/summary.js';
 import { TARGET_GRADE } from '../../src/lib/afterVisit/readability.js';
@@ -58,4 +58,32 @@ Then('the summary never says {string}', function (this: World, s: string) {
 
 Then('the summary goes to the crisis path', function (this: World) {
   assert.deepEqual(this.avs, { status: 'crisis' });
+});
+
+// ---- real users (quick notes)
+
+import { planAfterVisitUpdate, type AfterVisitUpdate } from '../../src/lib/afterVisit/useAfterVisitSummary.js';
+import type { Visit } from '../../src/lib/types.js';
+
+interface RealWorld extends World {
+  realVisit?: Visit;
+  update?: AfterVisitUpdate;
+}
+
+Given('a real user\'s past visit with Dr. Kim has the quick notes {string}', function (this: RealWorld, notes: string) {
+  this.realVisit = { id: 'v', date: '2026-11-10', clinician: 'Dr. Kim', priorities: [], askingFor: [], notes };
+});
+
+When('they open After for that visit', function (this: RealWorld) {
+  const r = summarizeNotes(this.realVisit!.notes!, { talkingPoints: [] });
+  assert.equal(r.status, 'ok');
+  if (r.status === 'ok') this.update = planAfterVisitUpdate(this.realVisit!, r.summary, { visits: [this.realVisit!], followUps: [] });
+});
+
+Then('the recap says {string}', function (this: RealWorld, line: string) {
+  assert.ok(this.update?.visitPatch.recap?.doctorSaid.some((l) => l.includes(line)), JSON.stringify(this.update));
+});
+
+Then('a next step {string} is added', function (this: RealWorld, step: string) {
+  assert.ok(this.update?.newFollowUps.some((f) => f.step === step), JSON.stringify(this.update));
 });

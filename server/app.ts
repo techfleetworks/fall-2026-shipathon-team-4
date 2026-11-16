@@ -20,7 +20,7 @@ import { LABS_NOTE, MAX_LAB_FIELD_CHARS, MAX_LAB_ROWS, type LabRow } from '../sr
 import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
-import { summarizeVisit } from '../src/lib/afterVisit/summary.js';
+import { summarizeNotes, summarizeVisit } from '../src/lib/afterVisit/summary.js';
 import { extractActionItems } from '../src/lib/afterVisit/actionItems.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig, type AuthUser } from './auth.js';
@@ -296,6 +296,39 @@ export function createApp({
   });
 
   /**
+   * POST /api/notes-summary: the plain-language after-visit summary for a REAL user's visit (ADR-011, ADR-013).
+   * Their source is the visit's quick notes (typed, or spoken through the At-the-visit live capture). Notes that read
+   * like a conversation ("Dr. Lane: …") are summarized as a transcript; anything else as notes. Nothing is stored.
+   * Body: { "notes": string, "talkingPoints"?: string[] (up to 3) }
+   * 200 { status: "ok", summary } · 200 { status: "crisis", help } · 200 { status: "blocked", message, rules } · 400 · 415
+   */
+  api.post('/notes-summary', signedIn, (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const body: unknown = req.body;
+    if (!isPlainObject(body) || typeof body.notes !== 'string') return sendError(res, 400, 'INVALID_TEXT');
+    const notes = body.notes;
+    if (!notes.trim()) return sendError(res, 400, 'EMPTY_TEXT');
+    if (notes.length > MAX_EXPLAIN_CHARS) return sendError(res, 400, 'TEXT_TOO_LONG');
+    const talkingPoints = body.talkingPoints ?? [];
+    if (!Array.isArray(talkingPoints) || talkingPoints.length > 3 || !talkingPoints.every((p) => typeof p === 'string' && p.length <= 300)) {
+      return sendError(res, 400, 'INVALID_TEXT');
+    }
+    const asTranscript = processTranscript(notes, 'paste');
+    if (asTranscript.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+    const outcome = asTranscript.status === 'accepted'
+      ? summarizeVisit(asTranscript.payload, { talkingPoints })
+      : summarizeNotes(notes, { talkingPoints });
+    switch (outcome.status) {
+      case 'crisis':
+        return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+      case 'blocked':
+        return res.status(200).json({ status: 'blocked', message: outcome.message, rules: [...new Set(outcome.violations.map((v) => v.rule))] });
+      case 'ok':
+        return res.status(200).json({ status: 'ok', summary: outcome.summary, disclaimer: DISCLAIMERS.short.body });
+    }
+  });
+
+  /**
    * POST /api/explain: clinical → plain. Finds clinical terms and note shorthand ("somnolence", "5/52",
    * "?orthostatic hypotension") and returns the vetted plain explanation for each (ADR-007). Free: no AI.
    * Body: { "text": string }  (a clinical note, what the doctor said, or the app's doctor-terms lines)
@@ -468,7 +501,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/demo', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);
