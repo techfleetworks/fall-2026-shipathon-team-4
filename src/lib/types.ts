@@ -183,13 +183,27 @@ export interface BriefSnapshot {
   demo: boolean;
 }
 
+/** One doctor a share link was sent to. Each has a private address, so sharing can stop per doctor. */
+export interface ShareRecipient {
+  id: string;
+  name: string;
+  email?: string;
+  token: string;
+  sharedAt: string; // ISO
+  revokedAt?: string;
+}
+
 export interface ShareLink {
   id: string;
+  /** Link-wide address. Only opens links made before per-doctor sharing (no `recipients`). */
   token: string;
   createdAt: string; // ISO
   expiresAt: string; // ISO
+  /** Set when the whole link is stopped ("Stop sharing with all"). */
   revokedAt?: string;
   snapshot: BriefSnapshot;
+  /** Doctors this summary is shared with. Missing on older links. */
+  recipients?: ShareRecipient[];
 }
 
 export interface StoryDraft {

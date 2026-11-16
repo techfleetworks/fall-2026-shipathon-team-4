@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { APP_NAME } from '../lib/brand';
-import { isLinkActive, useApp } from '../lib/store';
+import { resolveShareToken, useApp } from '../lib/store';
 import { DoctorBriefBody } from './Brief';
 
 /**
@@ -11,10 +11,11 @@ import { DoctorBriefBody } from './Brief';
  */
 export function SharedBrief() {
   const { token } = useParams();
-  const link = useApp((s) => (s.shareLinks ?? []).find((l) => l.token === token));
+  // A doctor's own address, or (older links) the link-wide one. Stopped or expired → undefined.
+  const link = useApp((s) => resolveShareToken(s.shareLinks ?? [], token));
 
   // D2: expired, revoked and unknown links all look the same, so nothing about the patient leaks — not even a name.
-  if (!link || !isLinkActive(link)) {
+  if (!link) {
     return (
       <div className="shared">
         <header className="shared-bar"><span className="shared-bar__brand">{APP_NAME}</span></header>

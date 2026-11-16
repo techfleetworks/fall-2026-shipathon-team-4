@@ -20,6 +20,7 @@ import type {
   NotificationPrefs,
   MyPlaybook,
   ShareLink,
+  ShareRecipient,
 } from './types';
 import { buildDemoState } from '../data/demo';
 
@@ -74,8 +75,14 @@ interface AppActions {
   setNotifications: (p: Partial<NotificationPrefs>) => void;
   savePlaybook: (p: Omit<MyPlaybook, 'id' | 'createdAt'>) => string;
   deletePlaybook: (id: string) => void;
-  createShareLink: (snapshot: ShareLink['snapshot'], days: number) => ShareLink;
+  /** Makes one link with a private address per doctor. */
+  createShareLink: (snapshot: ShareLink['snapshot'], days: number, recipients?: { name: string; email?: string }[]) => ShareLink;
+  /** Stops the whole link, for every doctor on it. */
   revokeShareLink: (id: string) => void;
+  /** Stops sharing with one doctor; the link keeps working for the others. */
+  revokeShareRecipient: (linkId: string, recipientId: string) => void;
+  /** "Stop sharing with all": stops every active link for every doctor. */
+  revokeAllShareLinks: () => void;
   loadDemo: () => void;
   deleteEverything: () => void;
 }
@@ -224,22 +231,49 @@ export const useApp = create<AppData & AppActions>()(
       },
       deletePlaybook: (id) => set((s) => ({ myPlaybooks: (s.myPlaybooks ?? []).filter((p) => p.id !== id) })),
 
-      createShareLink: (snapshot, days) => {
+      createShareLink: (snapshot, days, recipients = []) => {
         const now = new Date();
-        const bytes = crypto.getRandomValues(new Uint8Array(12));
-        const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
         const link: ShareLink = {
           id: uid(),
-          token,
+          token: newToken(),
           createdAt: now.toISOString(),
           expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString(),
           snapshot,
+          recipients: recipients.map((r) => ({ id: uid(), name: r.name, email: r.email, token: newToken(), sharedAt: now.toISOString() })),
         };
         set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
         return link;
       },
       revokeShareLink: (id) =>
-        set((s) => ({ shareLinks: (s.shareLinks ?? []).map((l) => (l.id === id ? { ...l, revokedAt: new Date().toISOString() } : l)) })),
+        set((s) => {
+          const at = new Date().toISOString();
+          return {
+            shareLinks: (s.shareLinks ?? []).map((l) => (l.id === id
+              ? { ...l, revokedAt: at, recipients: l.recipients?.map((r) => (r.revokedAt ? r : { ...r, revokedAt: at })) }
+              : l)),
+          };
+        }),
+      revokeShareRecipient: (linkId, recipientId) =>
+        set((s) => {
+          const at = new Date().toISOString();
+          return {
+            shareLinks: (s.shareLinks ?? []).map((l) => {
+              if (l.id !== linkId) return l;
+              const recipients = (l.recipients ?? []).map((r) => (r.id === recipientId && !r.revokedAt ? { ...r, revokedAt: at } : r));
+              // Last doctor stopped: the link is stopped too, so it leaves "Active share links".
+              return { ...l, recipients, revokedAt: recipients.every((r) => r.revokedAt) ? (l.revokedAt ?? at) : l.revokedAt };
+            }),
+          };
+        }),
+      revokeAllShareLinks: () =>
+        set((s) => {
+          const at = new Date().toISOString();
+          return {
+            shareLinks: (s.shareLinks ?? []).map((l) => (isLinkActive(l)
+              ? { ...l, revokedAt: at, recipients: l.recipients?.map((r) => (r.revokedAt ? r : { ...r, revokedAt: at })) }
+              : l)),
+          };
+        }),
 
       loadDemo: () => set((s) => ({ ...EMPTY, textScale: s.textScale, ...buildDemoState() })),
 
@@ -296,7 +330,33 @@ export function selectLatestSummary(s: Pick<AppData, 'summaries'>): CaseSummary 
 }
 
 export function isLinkActive(l: ShareLink, now = Date.now()): boolean {
-  return !l.revokedAt && new Date(l.expiresAt).getTime() > now;
+  if (l.revokedAt || new Date(l.expiresAt).getTime() <= now) return false;
+  return !l.recipients?.length || l.recipients.some((r) => !r.revokedAt);
+}
+
+/** Doctors still able to open a link. */
+export function activeRecipients(l: ShareLink): ShareRecipient[] {
+  return isLinkActive(l) ? (l.recipients ?? []).filter((r) => !r.revokedAt) : [];
+}
+
+/**
+ * What a share address opens, if anything. A doctor's own address works while the link and that doctor
+ * are both active; the link-wide address only opens older links that have no doctor list.
+ */
+export function resolveShareToken(links: ShareLink[], token: string | undefined): ShareLink | undefined {
+  if (!token) return undefined;
+  for (const l of links) {
+    if (!isLinkActive(l)) continue;
+    if (l.recipients?.length) {
+      if (l.recipients.some((r) => r.token === token && !r.revokedAt)) return l;
+    } else if (l.token === token) return l;
+  }
+  return undefined;
+}
+
+function newToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function selectDueFollowUps(s: Pick<AppData, 'followUps'>): FollowUp[] {

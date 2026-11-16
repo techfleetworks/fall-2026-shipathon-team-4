@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { IconTrash } from '../components/Icons';
 import { Chip, ConfirmButton } from '../components/ui';
 import { daysUntil, formatDate, formatShort, todayISO } from '../lib/dates';
 import { hasCrisisLanguage } from '../lib/safety';
-import { selectLatestSummary, selectUpcomingVisit, useApp } from '../lib/store';
-import type { Evidence, ShareLink, Visit } from '../lib/types';
+import { activeRecipients, isLinkActive, selectLatestSummary, selectUpcomingVisit, useApp } from '../lib/store';
+import type { Evidence, ShareLink, ShareRecipient, Visit } from '../lib/types';
 import { ImportView } from './visit/Before';
 import { beforeSteps, formatTime, Modal } from './visit/common';
 
@@ -308,28 +308,95 @@ export function ImportStandalone() {
 export function linkUrl(l: ShareLink) {
   return `${window.location.origin}/shared/${l.token}`;
 }
+export function recipientUrl(r: ShareRecipient) {
+  return `${window.location.origin}/shared/${r.token}`;
+}
+
+async function copy(text: string, onDone?: (m: string) => void) {
+  try { await navigator.clipboard.writeText(text); onDone?.('Copied'); } catch { onDone?.('Couldn’t copy on this device'); }
+}
+
+/** Every active link. With more than one shared summary, "Stop sharing all" stops every link at once. */
+export function ActiveShareLinks({ onToast, empty }: { onToast?: (m: string) => void; empty?: ReactNode }) {
+  // Select the stored array (stable between renders), then filter — a filtered array from the
+  // selector itself would be new every render and loop forever.
+  const all = useApp((s) => s.shareLinks);
+  const links = useMemo(() => (all ?? []).filter((l) => isLinkActive(l)), [all]);
+  const revokeAll = useApp((s) => s.revokeAllShareLinks);
+  if (links.length === 0) return <>{empty ?? null}</>;
+  return (
+    <div className="share-list">
+      {links.map((l) => <ShareLinkRow key={l.id} link={l} onCopied={onToast} />)}
+      {links.length > 1 && (
+        <ConfirmButton
+          className="btn btn--sm btn--outline-danger share-list__all"
+          question={`Stop sharing ${links.length === 2 ? 'both' : `all ${links.length}`} summaries? Every link stops working right away, for every doctor.`}
+          confirmLabel="Stop sharing all"
+          onConfirm={() => { revokeAll(); onToast?.('Stopped sharing all summaries'); }}
+        >
+          Stop sharing all
+        </ConfirmButton>
+      )}
+    </div>
+  );
+}
 
 export function ShareLinkRow({ link, onCopied }: { link: ShareLink; onCopied?: (m: string) => void }) {
   const revoke = useApp((s) => s.revokeShareLink);
+  const revokeRecipient = useApp((s) => s.revokeShareRecipient);
   const expires = new Date(link.expiresAt);
+  const people = link.recipients?.length ? activeRecipients(link) : null;
   return (
-    <div className="card card--soft">
-      <span className="card__title">Brief · made {formatDate(link.createdAt.slice(0, 10))}</span>
+    <div className="card card--soft share-link">
+      <span className="card__title">Summary{link.snapshot.visitDate ? ` for ${formatShort(link.snapshot.visitDate)}` : ''} · made {formatDate(link.createdAt.slice(0, 10))}</span>
       <span className="small muted">Expires {expires.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at {expires.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
-      <div className="row row--wrap">
-        <button
-          className="btn btn--sm"
-          onClick={async () => {
-            try { await navigator.clipboard.writeText(linkUrl(link)); onCopied?.('Copied'); } catch { onCopied?.('Couldn’t copy on this device'); }
-          }}
+      <span className="eyebrow-soft">Shared with</span>
+      <ul className="share-people">
+        {people ? people.map((r) => (
+          <li key={r.id}>
+            <span className="share-people__who">
+              <strong>{r.name}</strong>
+              {r.email && <span className="small muted">{r.email}</span>}
+            </span>
+            <span className="row row--wrap share-people__actions">
+              <button className="btn btn--sm" onClick={() => void copy(recipientUrl(r), onCopied)} aria-label={`Copy ${r.name}’s link`}>Copy link</button>
+              <Link to={`/shared/${r.token}`} className="btn btn--sm" aria-label={`Preview what ${r.name} sees`}>Preview</Link>
+              <ConfirmButton
+                className="btn btn--sm btn--outline-danger"
+                ariaLabel={`Stop sharing with ${r.name}`}
+                question={`Stop sharing with ${r.name}? Their link stops working right away${people.length > 1 ? '; others keep access' : ''}.`}
+                confirmLabel="Stop sharing"
+                onConfirm={() => { revokeRecipient(link.id, r.id); onCopied?.(`Stopped sharing with ${r.name}`); }}
+              >
+                Stop sharing
+              </ConfirmButton>
+            </span>
+          </li>
+        )) : (
+          // Links made before per-doctor sharing: one address for whoever has it.
+          <li>
+            <span className="share-people__who"><strong>Anyone with the link</strong></span>
+            <span className="row row--wrap share-people__actions">
+              <button className="btn btn--sm" onClick={() => void copy(linkUrl(link), onCopied)}>Copy link</button>
+              <Link to={`/shared/${link.token}`} className="btn btn--sm">Preview</Link>
+              <ConfirmButton className="btn btn--sm btn--outline-danger" question="Stop sharing? The link stops working right away." confirmLabel="Stop sharing" onConfirm={() => { revoke(link.id); onCopied?.('Stopped sharing'); }}>
+                Stop sharing
+              </ConfirmButton>
+            </span>
+          </li>
+        )}
+      </ul>
+      {people && people.length > 1 && (
+        <ConfirmButton
+          className="btn btn--sm btn--outline-danger share-link__everyone"
+          ariaLabel={`Stop sharing this summary with ${people.length === 2 ? 'both' : `all ${people.length}`} doctors`}
+          question={`Stop sharing this summary with ${people.length === 2 ? 'both' : `all ${people.length}`} doctors? Their links stop working right away.`}
+          confirmLabel="Stop sharing with everyone"
+          onConfirm={() => { revoke(link.id); onCopied?.('Stopped sharing this summary with everyone'); }}
         >
-          Copy link
-        </button>
-        <Link to={`/shared/${link.token}`} className="btn btn--sm">Preview</Link>
-        <ConfirmButton className="btn btn--sm btn--outline-danger" question="Stop sharing? The link stops working right away." confirmLabel="Stop sharing" onConfirm={() => { revoke(link.id); onCopied?.('Stopped sharing'); }}>
-          Stop sharing
+          Stop sharing with everyone
         </ConfirmButton>
-      </div>
+      )}
     </div>
   );
 }

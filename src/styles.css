@@ -984,3 +984,16 @@ a.tasks__item:hover { border-color: var(--primary); }
 .feelings-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .feelings-more__group { display: flex; flex-direction: column; gap: 8px; }
 @media (max-width: 760px) { .feelings-more { grid-template-columns: 1fr; } }
+
+/* Active share links: one card per link, one row per doctor */
+.share-list { display: flex; flex-direction: column; gap: 12px; }
+.share-list__all { align-self: flex-start; }
+.share-link { gap: 6px; }
+.share-people { list-style: none; margin: 0; padding: 0; }
+.share-people li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line-card); }
+.share-people li:first-child { border-top: 0; padding-top: 4px; }
+.share-people__who { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.share-people__actions { gap: 8px; }
+.share-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+@media (max-width: 560px) { .share-add { grid-template-columns: 1fr; } .share-add .btn { justify-self: start; } }
+.share-link__everyone { align-self: flex-start; margin-top: 4px; }

@@ -5,8 +5,8 @@ import { ChipSelect, ConfirmButton, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
 import { todayISO } from '../lib/dates';
 import { deleteServerAccount, logOut as serverLogOut } from '../lib/auth';
-import { isLinkActive, useApp } from '../lib/store';
-import { ShareLinkRow } from './Visits';
+import { activeRecipients, isLinkActive, useApp } from '../lib/store';
+import { ActiveShareLinks } from './Visits';
 import { dataAsCsv } from '../lib/exportCsv';
 
 const SECTIONS = [
@@ -153,6 +153,7 @@ function PrivacySection() {
   const state = useApp();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Delete on the sign-in server first (account + its database rows). Only if that worked, wipe this device,
@@ -163,11 +164,17 @@ function PrivacySection() {
     const server = await deleteServerAccount();
     setDeleting(false);
     if (!server.ok) return setDeleteError(server.message);
+    // Stop every share link first, so no doctor can open one while the account is being removed.
+    state.revokeAllShareLinks();
     state.deleteEverything();
     navigate('/', { replace: true });
   };
   const [toast, showToast] = useToast();
   const activeLinks = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
+  // People who can still open a link: each active doctor, or one per older "anyone with the link" link.
+  const sharedWith = activeLinks.reduce((n, l) => n + (l.recipients?.length ? activeRecipients(l).length : 1), 0);
+  const typedOk = typed.trim().toLowerCase() === 'delete';
+  const cancelDelete = () => { setConfirming(false); setTyped(''); setDeleteError(null); };
   const consent = state.profile?.consent ?? { saveStory: true, makeSummaries: false, anonymousRatings: false };
   const setConsent = (patch: Partial<typeof consent>) => state.updateProfile({ consent: { ...consent, ...patch } });
 
@@ -203,11 +210,10 @@ function PrivacySection() {
 
       <section className="pcard">
         <span className="eyebrow">Active share links</span>
-        {activeLinks.length === 0 ? (
-          <p className="muted">No active share links. When you share your brief by link, it will show here so you can stop sharing anytime.</p>
-        ) : (
-          activeLinks.map((l) => <ShareLinkRow key={l.id} link={l} onCopied={showToast} />)
-        )}
+        <ActiveShareLinks
+          onToast={showToast}
+          empty={<p className="muted">No active share links. When you share your summary by link, each doctor shows here so you can stop sharing with them anytime.</p>}
+        />
         <Link to="/visits/share" className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }}>Make a share link</Link>
       </section>
 
@@ -226,16 +232,29 @@ function PrivacySection() {
           {!confirming ? (
             <button className="btn btn--outline-danger" style={{ alignSelf: 'flex-start' }} onClick={() => setConfirming(true)}>Delete account</button>
           ) : (
-            <div className="stack-sm" role="alertdialog" aria-labelledby="del-q">
-              <p id="del-q"><strong>Delete your account and everything on this device?</strong> This can’t be undone.</p>
+            <form className="stack-sm" role="alertdialog" aria-labelledby="del-q" aria-describedby={activeLinks.length > 0 ? 'del-links' : undefined} noValidate
+              onSubmit={(e) => { e.preventDefault(); if (typedOk && !deleting) void deleteForGood(); }}>
+              <p id="del-q" style={{ margin: 0 }}><strong>Delete your account and everything on this device?</strong> This can’t be undone.</p>
+              {activeLinks.length > 0 && (
+                <p id="del-links" className="confirm-inline small" style={{ margin: 0 }}>
+                  <strong>You’re still sharing your summary with {sharedWith} {sharedWith === 1 ? 'doctor' : 'doctors'}.</strong>{' '}
+                  Deleting your account stops {activeLinks.length === 1 ? 'that link' : `all ${activeLinks.length} links`} right away, and they won’t be able to open {sharedWith === 1 ? 'it' : 'them'} again.
+                </p>
+              )}
+              <div className="field">
+                <label htmlFor="del-type">Type <strong>delete</strong> to confirm</label>
+                <input id="del-type" className="input" autoComplete="off" autoCapitalize="none" spellCheck={false} autoFocus
+                  value={typed} onChange={(e) => setTyped(e.target.value)} aria-describedby="del-type-hint" />
+                <span id="del-type-hint" className="small muted">This keeps your account from being deleted by accident.</span>
+              </div>
               <div className="btn-row">
-                <button className="btn btn--outline" onClick={() => setConfirming(false)}>Cancel</button>
-                <button className="btn btn--danger" onClick={() => void deleteForGood()} disabled={deleting} aria-busy={deleting}>
+                <button type="button" className="btn btn--outline" onClick={cancelDelete}>Cancel</button>
+                <button type="submit" className="btn btn--danger" disabled={!typedOk || deleting} aria-busy={deleting}>
                   {deleting ? 'Deleting…' : 'Delete for good'}
                 </button>
               </div>
               {deleteError && <p className="note" role="alert">{deleteError}</p>}
-            </div>
+            </form>
           )}
         </section>
       </div>

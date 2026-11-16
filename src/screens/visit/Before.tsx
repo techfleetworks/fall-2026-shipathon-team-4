@@ -8,7 +8,7 @@ import { formatDate, formatShort, todayISO, toISODate } from '../../lib/dates';
 import { parseNotes, type FoundItem, type FoundKind } from '../../lib/importParse';
 import { draftPlaybook } from '../../lib/playbook';
 import { hasCrisisLanguage } from '../../lib/safety';
-import { isLinkActive, selectLatestSummary, useApp, useDraft } from '../../lib/store';
+import { selectLatestSummary, useApp, useDraft } from '../../lib/store';
 import {
   FREQUENCY_CHOICES,
   IMPACT_CHOICES,
@@ -19,9 +19,9 @@ import {
 import { requestPrepSummary } from '../../lib/api';
 import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
 import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
-import type { FieldKey, StoryDraft, Visit } from '../../lib/types';
+import type { FieldKey, ShareRecipient, StoryDraft, Visit } from '../../lib/types';
 import { Priorities, suggestionsFrom } from '../Brief';
-import { ShareLinkRow, linkUrl } from '../Visits';
+import { ActiveShareLinks, recipientUrl } from '../Visits';
 import { formatTime, Modal, prepFeelings, useVisitParam, VisitLayout } from './common';
 
 /* ======================================================================
@@ -657,16 +657,37 @@ export function ShareStep() {
   const [tp, setTp] = useState(true);
   const [sum, setSum] = useState(true);
   const [days, setDays] = useState(7);
-  const [made, setMade] = useState<string | null>(null);
+  const [made, setMade] = useState<ShareRecipient[] | null>(null);
   const [toast, showToast] = useToast();
+  // Doctors to share with: this visit's doctor is suggested; more can be added.
+  const [doctors, setDoctors] = useState<{ name: string; email?: string; on: boolean }[]>(() =>
+    visit?.clinician ? [{ name: visit.clinician, email: visit.clinicianEmail, on: true }] : []);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
   if (!visit) return <Navigate to="/visits" replace />;
-  const active = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
+  const picked = doctors.filter((d) => d.on);
+
+  const addDoctor = () => {
+    const name = newName.trim();
+    const email = newEmail.trim();
+    if (!name) return setAddError('Enter the doctor’s name.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setAddError('Enter a valid email address, or leave it blank.');
+    if (doctors.some((d) => d.name.toLowerCase() === name.toLowerCase())) return setAddError('That doctor is already on the list.');
+    setDoctors([...doctors, { name, email: email || undefined, on: true }]);
+    setNewName('');
+    setNewEmail('');
+    setAddError(null);
+  };
 
   const create = async () => {
-    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum }), days);
+    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum }), days, picked.map(({ name, email }) => ({ name, email })));
     state.updateVisit(visit.id, { shared: true });
-    setMade(linkUrl(l));
-    try { await navigator.clipboard.writeText(linkUrl(l)); showToast('Link made and copied'); } catch { showToast('Link made'); }
+    const people = l.recipients ?? [];
+    setMade(people);
+    if (people.length === 1) {
+      try { await navigator.clipboard.writeText(recipientUrl(people[0])); showToast('Link made and copied'); } catch { showToast('Link made'); }
+    } else showToast(`Made ${people.length} links — one per doctor`);
   };
   const pdf = () => {
     state.updateVisit(visit.id, { shared: true });
@@ -679,12 +700,7 @@ export function ShareStep() {
         <h1 className="panel-title">Share your summary</h1>
         <p className="muted" style={{ margin: 0 }}>Download a PDF, or send a link that expires. No records system needed.</p>
         <button className="btn btn--primary" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>Share options</button>
-        {active.length > 0 && (
-          <>
-            <span className="eyebrow-soft">Active links</span>
-            {active.map((l) => <ShareLinkRow key={l.id} link={l} onCopied={showToast} />)}
-          </>
-        )}
+        <ActiveShareLinks onToast={showToast} />
       </section>
 
       {open && (
@@ -694,8 +710,30 @@ export function ShareStep() {
             <div className="checklist__row"><Checkbox checked={tp} onChange={setTp}>Talking points</Checkbox></div>
             <div className="checklist__row"><Checkbox checked={sum} onChange={setSum}>Doctor summary</Checkbox></div>
           </div>
+          <span className="eyebrow-soft">Share with</span>
+          {doctors.length > 0 && (
+            <div className="checklist">
+              {doctors.map((d, i) => (
+                <div key={d.name} className="checklist__row">
+                  <Checkbox checked={d.on} onChange={(on) => setDoctors(doctors.map((x, j) => (j === i ? { ...x, on } : x)))}>
+                    {d.name}{d.email && <span className="small muted"> · {d.email}</span>}
+                  </Checkbox>
+                </div>
+              ))}
+            </div>
+          )}
+          <form className="share-add" noValidate onSubmit={(e) => { e.preventDefault(); addDoctor(); }}>
+            <label htmlFor="sd-name" className="sr-only">Doctor’s name</label>
+            <input id="sd-name" className="input" placeholder="Doctor’s name" value={newName} onChange={(e) => { setNewName(e.target.value); setAddError(null); }} />
+            <label htmlFor="sd-email" className="sr-only">Doctor’s email (optional)</label>
+            <input id="sd-email" className="input" type="email" placeholder="Email (optional)" value={newEmail} onChange={(e) => { setNewEmail(e.target.value); setAddError(null); }} />
+            <button type="submit" className="btn btn--sm btn--outline">Add doctor</button>
+          </form>
+          {addError && <p className="form-error" role="alert" style={{ margin: 0 }}>{addError}</p>}
           <div className="grid-2">
-            <button className="btn btn--primary" disabled={!tp && !sum} onClick={create}>Create link</button>
+            <button className="btn btn--primary" disabled={(!tp && !sum) || picked.length === 0} onClick={create}>
+              {picked.length > 1 ? `Create ${picked.length} links` : 'Create link'}
+            </button>
             <button className="btn btn--outline" disabled={!tp && !sum} onClick={pdf}>Download PDF</button>
           </div>
           <div className="field">
@@ -704,13 +742,16 @@ export function ShareStep() {
               {EXPIRY.map((e) => <option key={e.days} value={e.days}>{e.label}</option>)}
             </select>
           </div>
+          {picked.length === 0 && <p className="small muted" style={{ margin: 0 }}>Add at least one doctor to make a link.</p>}
           {made && (
             <div className="quote small" role="status" style={{ wordBreak: 'break-all' }}>
-              Your link: <a href={made}>{made}</a>
+              {made.map((r) => (
+                <p key={r.id} style={{ margin: '2px 0' }}><strong>{r.name}:</strong> <a href={recipientUrl(r)}>{recipientUrl(r)}</a></p>
+              ))}
             </div>
           )}
           <p className="small muted" style={{ margin: 0 }}>
-            Anyone with the link can view it until it expires. You can stop sharing anytime in <Link to="/settings/privacy">Settings</Link>.
+            Each doctor gets their own link, so you can stop sharing with one and keep the others. Links work until they expire, or until you stop sharing here or in <Link to="/settings/privacy">Settings</Link>.
             For now links open only on this device, because nothing is uploaded yet.
           </p>
           <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
