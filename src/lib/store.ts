@@ -248,6 +248,7 @@ export const useApp = create<AppData & AppActions>()(
         set({ ...EMPTY });
         try {
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(SYNC_STORAGE_KEY); // sync turned off too, so nothing is pulled back
           sessionStorage.clear();
         } catch {
           /* storage unavailable */
@@ -269,6 +270,8 @@ export const useApp = create<AppData & AppActions>()(
 );
 
 const STORAGE_KEY = 'get-heard';
+/** Visit store sync settings (src/lib/sync/index.ts SYNC_STORAGE_KEY; kept here to avoid a circular import, tested equal). */
+export const SYNC_STORAGE_KEY = 'get-heard-sync';
 
 // ---------- selectors ----------
 
