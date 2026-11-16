@@ -1,4 +1,5 @@
-import { formatDate, formatShort } from './dates';
+import { buildCaseSnapshot } from './caseView/snapshot';
+import { formatDate, formatShort, todayISO } from './dates';
 import type { AppData } from './store';
 import { selectLatestSummary, selectUpcomingVisit } from './store';
 import type { BriefSnapshot, Visit } from './types';
@@ -7,7 +8,8 @@ import type { BriefSnapshot, Visit } from './types';
 export function buildBriefSnapshot(
   s: AppData,
   forVisit?: Visit,
-  include: { talkingPoints: boolean; summary: boolean } = { talkingPoints: true, summary: true },
+  /** `caseHistory`: include the shareable record (the case in doctor terms, ADR-020). Off unless chosen. */
+  include: { talkingPoints: boolean; summary: boolean; caseHistory?: boolean } = { talkingPoints: true, summary: true },
 ): BriefSnapshot {
   const latest = selectLatestSummary(s);
   const visit = forVisit ?? selectUpcomingVisit(s);
@@ -41,5 +43,11 @@ export function buildBriefSnapshot(
       .map((e) => ({ date: e.date, detail: e.detail })),
     askingFor: include.talkingPoints ? (visit?.askingFor ?? []) : [],
     demo: s.demoMode,
+    ...(include.caseHistory ? caseFor(s) : {}),
   };
+}
+
+function caseFor(s: AppData) {
+  const snapshot = buildCaseSnapshot({ medications: s.medications, evidence: s.evidence, visits: s.visits, followUps: s.followUps, summaries: s.summaries }, todayISO());
+  return snapshot ? { case: snapshot } : {};
 }

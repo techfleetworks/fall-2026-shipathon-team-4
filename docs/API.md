@@ -358,6 +358,18 @@ classes. **All its wording is a first draft for you and Dominic.** It only shows
 - Logging in on a new device restores the backup (in `Auth.tsx`, before onboarding), so people with a backup skip setup.
 - The facts for the mentor's storage/offline notice, and the screens that say "stays on this device": `docs/STORAGE_NOTICE.md`.
 
+## 2o. The shareable record: case history in a doctor link (new, ADR-020)
+
+**Already wired, please review.**
+- **Share step:** a third "Include" box, **"Case history (patterns, key dates, past visits)"**, off by default (one checkbox in `ShareStep`).
+  It adds `case` to the snapshot: `buildBriefSnapshot(state, visit, { talkingPoints, summary, caseHistory: true })`.
+- **Doctor view:** when a brief has `case`, a **"Case history"** section shows under it (`SharedCase` in `src/components/SharedCase.tsx`,
+  one line in `DoctorBriefBody`): presenting symptoms, course, medications, patterns across visits, still open, key dates, past visits.
+  It uses your `room__card` / `room__label` classes. **Headings are a first draft.**
+- New users with too little history: no case section is added (the brief is shared as before).
+- When you wire the server sharing from 2e (`createShare`), pass the same snapshot: the server checks it, trims it, refuses crisis
+  language, and stores it **encrypted**. Sharing on the server now needs `RECORD_ENCRYPTION_KEY` too (SUPABASE_SETUP step 10).
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

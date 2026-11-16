@@ -8,6 +8,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { BriefSnapshot } from '../../src/lib/types.js';
+import { recordKeysFromEnv } from '../records/crypto.js';
+import { encryptedShareStore } from './encrypted.js';
 
 export const RECIPIENT_ROLES = ['Primary care', 'Therapist', 'Psychiatrist', 'Specialist', 'Other'] as const;
 export type RecipientRole = (typeof RECIPIENT_ROLES)[number];
@@ -193,8 +195,13 @@ export function supabaseShareStore(url: string, serviceKey: string): ShareStore 
   };
 }
 
+/**
+ * Sharing is on only with a database AND the encryption key (ADR-020): shared briefs can hold the whole case history, so
+ * they are never stored readable. Without the key, sharing answers 503 SHARING_NOT_CONFIGURED (fails closed).
+ */
 export function shareStoreFromEnv(env: NodeJS.ProcessEnv = process.env): ShareStore | undefined {
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  return url && key ? supabaseShareStore(url, key) : undefined;
+  const keys = recordKeysFromEnv(env);
+  return url && key && keys ? encryptedShareStore(supabaseShareStore(url, key), keys) : undefined;
 }
