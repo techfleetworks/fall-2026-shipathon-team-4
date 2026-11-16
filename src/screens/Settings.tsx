@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { BackupSync } from '../components/BackupSync';
 import { Shell } from '../components/Shell';
 import { ChipSelect, ConfirmButton, useToast } from '../components/ui';
 import { APP_NAME } from '../lib/brand';
@@ -215,6 +216,8 @@ function PrivacySection() {
           hint={state.profile?.askBeforeRecording === false ? 'Your doctor will still always be asked.' : undefined}
         />
       </div>
+
+      <BackupSync />
 
       <section className="pcard">
         <span className="eyebrow">Active share links</span>

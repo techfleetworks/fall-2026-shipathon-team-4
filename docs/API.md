@@ -345,6 +345,19 @@ Settings, plus sync). Signed-in only; Theo is read-only. The server encrypts the
 `record` is the app's own data (profile, medications, summaries, evidence, visits, followUps, savedScripts, sharedTips, myPlaybooks,
 notifications, morning, textScale), up to 512 KB. Never stored: the password hash, the email, share links, `signedIn`, `demoMode`.
 
+## 2n. Visit store: "Back up and sync" (new, ADR-019)
+
+**Already wired, please review.** A **"Back up and sync"** card now sits in **Settings → Privacy and data**, under the toggles
+(`BackupSync` in `src/components/BackupSync.tsx`, one line in `PrivacySection`). It uses your `pcard`, `toggle-row` and `switch`
+classes. **All its wording is a first draft for you and Dominic.** It only shows on the real users' site with server sign-in.
+
+- Off by default. On: an encrypted copy is saved on the server and kept in step across the person's devices. Turning off asks
+  "keep server copy" or "delete server copy".
+- Status line under the switch (`useSyncState()` from `src/lib/sync`): Backed up (time) · Backing up… · Offline · Log in again ·
+  Paused (another account on this device) · Not available yet · Couldn't back up.
+- Logging in on a new device restores the backup (in `Auth.tsx`, before onboarding), so people with a backup skip setup.
+- The facts for the mentor's storage/offline notice, and the screens that say "stays on this device": `docs/STORAGE_NOTICE.md`.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

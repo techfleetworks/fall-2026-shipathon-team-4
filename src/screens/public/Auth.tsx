@@ -5,6 +5,7 @@ import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
 import { fetchMyAppData } from '../../lib/demoApi';
+import { restoreBackupAfterLogin } from '../../lib/sync';
 import { SITE } from '../../lib/siteMode';
 import { selectHasAccount, useApp } from '../../lib/store';
 
@@ -77,6 +78,13 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
       }
       // This device already has this person's app data: just sign in.
       if (mode === 'login' && profile?.onboarded && profile.email === em) {
+        signIn();
+        return navigate('/home', { replace: true });
+      }
+      // A device with no account data yet, and they backed up on another device: restore it (Visit store, ADR-019).
+      // Never when someone else's data is on this device, so two people's records are never mixed.
+      if (mode === 'login' && !profile?.onboarded && (await restoreBackupAfterLogin())) {
+        useApp.getState().updateProfile({ email: em });
         signIn();
         return navigate('/home', { replace: true });
       }
