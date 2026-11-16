@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
 import { fetchMyAppData } from '../../lib/demoApi';
+import { SITE } from '../../lib/siteMode';
 import { selectHasAccount, useApp } from '../../lib/store';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,11 +26,20 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const [busy, setBusy] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Demo site: "Log in as Theo" on the start page fills in his login (ADR-016, team option A).
+  const [params] = useSearchParams();
+  const theo = SITE.mode === 'demo' && params.get('as') === 'theo' ? SITE.demoLogin : undefined;
+  const [email, setEmail] = useState(theo?.email ?? '');
+  const [password, setPassword] = useState(theo?.password ?? '');
   const [confirm, setConfirm] = useState('');
   const [showReset, setShowReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Also when arriving from another page that reuses this screen (e.g. the demo's sign-up notice → "Log in as Theo").
+  useEffect(() => {
+    if (!theo) return;
+    setEmail(theo.email);
+    setPassword(theo.password);
+  }, [theo]);
 
   const switchTo = (m: 'signup' | 'login') => {
     setError(null);
@@ -96,6 +106,9 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
     navigate('/home', { replace: true });
   };
 
+  // Demo site (ADR-016): no sign-up here. Its own Supabase project holds only Theo; real accounts live on the real site.
+  if (SITE.mode === 'demo' && mode === 'signup') return <DemoSignUpNotice />;
+
   return (
     <PublicLayout footer={false}>
       <main id="main" className="auth">
@@ -109,7 +122,7 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
         <section className="auth-form">
           <form onSubmit={submit} noValidate>
             <div className="tabs" role="tablist" aria-label="Account">
-              <button type="button" role="tab" aria-selected={mode === 'signup'} onClick={() => switchTo('signup')}>Create account</button>
+              {SITE.mode !== 'demo' && <button type="button" role="tab" aria-selected={mode === 'signup'} onClick={() => switchTo('signup')}>Create account</button>}
               <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => switchTo('login')}>Log in</button>
             </div>
 
@@ -163,6 +176,29 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             {!isServerAuthEnabled() && <p className="form-note">This version keeps your data on this device only.</p>}
           </form>
         </section>
+      </main>
+    </PublicLayout>
+  );
+}
+
+/** Demo site: "Sign up" explains where real accounts are made, and offers Theo's login instead. */
+function DemoSignUpNotice() {
+  return (
+    <PublicLayout header="minimal">
+      <main id="main" className="pub-main pub-main--narrow">
+        <span className="eyebrow">Demo</span>
+        <h1>This is the demo, with Theo</h1>
+        <p className="pub-lead">
+          Theo is a made-up patient, so you can see how the app works with real-looking information. To use it with your own
+          appointments, create your free account on the real app.
+        </p>
+        <div className="btn-row">
+          {SITE.liveUrl && (
+            <a className="btn btn--primary" href={`${SITE.liveUrl}/signup`} rel="noopener noreferrer">Create my free account ↗</a>
+          )}
+          <Link className="btn btn--outline" to="/login?as=theo">Log in as Theo</Link>
+        </div>
+        <p className="small muted">Synthetic — illustrative only, not medical advice.</p>
       </main>
     </PublicLayout>
   );
