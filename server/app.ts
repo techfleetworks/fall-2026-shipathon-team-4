@@ -34,6 +34,8 @@ import { RECIPIENT_ROLES, TOKEN_PATTERN, hashToken, newToken, shareStoreFromEnv,
 import { runMapping } from './mapping/pipeline.js';
 import type { MappingEngine } from './mapping/types.js';
 import { parseStoryDraft } from './storyDraft.js';
+import { parseCaseInputs } from './caseInputs.js';
+import { buildCaseView } from '../src/lib/caseView/caseView.js';
 import type { TranscriptSource } from '../src/lib/transcript/types.js';
 
 /** Largest JSON body accepted. The transcript rules (200,000 characters) are stricter; this is the outer limit. */
@@ -66,6 +68,7 @@ export type ApiErrorCode =
   | 'EMPTY_TEXT'
   | 'TEXT_TOO_LONG'
   | 'INVALID_RESULTS'
+  | 'INVALID_CASE'
   | 'INVALID_SHARE'
   | 'EMPTY_BRIEF'
   | 'SHARE_NOT_FOUND'
@@ -103,6 +106,7 @@ const MESSAGES: Record<Exclude<ApiErrorCode, 'EMPTY' | 'TOO_LONG'>, string> = {
   DEMO_NOT_SET_UP: 'The demo patient isn’t set up on the server yet.',
   SHARING_NOT_CONFIGURED: 'Sharing with your doctor isn’t set up on the server yet.',
   INVALID_RESULTS: `Send a JSON object like { "labs": [{ "test": "...", "value": "...", "typicalRange": "..." }], "note": "..." } (up to ${MAX_LAB_ROWS} results).`,
+  INVALID_CASE: 'Send a JSON object like { "medications": [], "evidence": [], "visits": [], "followUps": [] } using the app’s record fields (dates as YYYY-MM-DD).',
   EMPTY_RESULTS: 'Add a lab result or a clinical note to explain first.',
   TEXT_TOO_LONG: `That’s more than we can explain at once (limit ${MAX_EXPLAIN_CHARS.toLocaleString('en-US')} characters).`,
   MALFORMED_JSON: 'The request body is not valid JSON.',
@@ -330,6 +334,21 @@ export function createApp({
   });
 
   /**
+   * POST /api/case-summary: patterns across visits, from the patient's own dated record (ADR-017). Free: no AI.
+   * Body: { "medications"?, "evidence"?, "visits"?, "followUps"? } (the app's record fields; see docs/API.md 2l)
+   * 200 { status: "ok", caseView, disclaimer } (caseView.enough is false with fewer than 2 dated entries)
+   * 200 { status: "crisis", help } (nothing built) · 400 INVALID_CASE · 415. Nothing is stored or logged.
+   */
+  api.post('/case-summary', signedIn, (req, res) => {
+    if (!req.is('application/json')) return sendError(res, 415, 'UNSUPPORTED_MEDIA_TYPE');
+    const input = parseCaseInputs(req.body);
+    if (!input) return sendError(res, 400, 'INVALID_CASE');
+    const out = buildCaseView(input, today());
+    if (out.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
+    return res.status(200).json({ status: 'ok', caseView: out.view, disclaimer: DISCLAIMERS.short.body });
+  });
+
+  /**
    * POST /api/explain: clinical → plain. Finds clinical terms and note shorthand ("somnolence", "5/52",
    * "?orthostatic hypotension") and returns the vetted plain explanation for each (ADR-007). Free: no AI.
    * Body: { "text": string }  (a clinical note, what the doctor said, or the app's doctor-terms lines)
@@ -522,7 +541,7 @@ export function createApp({
     return res.status(204).end();
   });
 
-  api.all(['/health', '/demo', '/demo/play-visit', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
+  api.all(['/health', '/demo', '/demo/play-visit', '/me/app-data', '/transcripts', '/prep-summary', '/visit-summary', '/explain', '/explain-results', '/notes-summary', '/case-summary', '/shares', '/shares/:id', '/shared/:token', '/account'], (_req, res) => sendError(res, 405, 'METHOD_NOT_ALLOWED'));
   api.use((_req, res) => sendError(res, 404, 'NOT_FOUND'));
 
   app.use('/api', api);

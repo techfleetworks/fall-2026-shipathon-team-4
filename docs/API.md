@@ -302,6 +302,30 @@ go to recap"). One click: the server summarizes Theo's synthetic transcript as i
 (`POST /api/demo/play-visit`, no sign-in), the visit's Recap, ✓ talking points and Next steps fill in, and the app opens After.
 Real users never see it. **Please check the placement and wording**: it's `PlayTheosVisit` in `src/screens/visit/At.tsx`.
 
+## 2l. Case view: patterns across visits (new, ADR-017)
+
+**Already wired, please review.** A new **"Patterns across visits"** panel sits under the Doctor summary and Timeline on **My history**
+(`CasePatterns` in `src/components/CasePatterns.tsx`, one line in `VisitHistory`). It uses only your existing `panel`, `eyebrow-soft`
+and `found` classes. **All its wording is a first draft for you and Dominic**: change anything.
+
+What it shows, from `buildCaseView(state, todayISO())` in `src/lib/caseView/caseView.ts` (runs on the device, nothing is sent):
+
+| Part | Example (Theo) |
+|---|---|
+| Patterns (`patterns[]`: timing, raised again, felt unheard twice) | Oct 13: "Daytime sleepiness and dizziness on standing began". That was 2 days after a medication change ("Ziprasidone dose increased", Oct 11). |
+| Still open (`openQuestions[]`: overdue next steps, talking points that didn't come up) | "Blood test": what happens next? · It was due Nov 8 and isn't marked done. |
+| Key dates (`highlights[]`, up to 6) | [Nov 7] Visit with Dr. Lane · felt heard 2/5 |
+
+**New users (empty state):** with fewer than 2 dated entries, `enough` is `false`, every list is empty, and the panel says so
+honestly ("Nothing to compare yet… You have none yet.") with "+ Add a date". Nothing is ever invented to fill the space.
+
+Each item has `refs` (`{ kind: 'evidence' | 'medication' | 'visit' | 'followUp', id }`) pointing at the entries it came from, if you
+want to highlight them in the Timeline. Show `note` ("…They show timing, not cause…") whenever patterns are shown.
+
+Server version (same engine, for a future Claude upgrade or other clients): `POST /api/case-summary` with
+`{ medications?, evidence?, visits?, followUps? }` (the app's own fields; dates `YYYY-MM-DD`; up to 500 of each) →
+`200 { status: "ok", caseView, disclaimer }` · `200 { status: "crisis", help }` · `400 INVALID_CASE` · `415`. Nothing is stored or logged.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

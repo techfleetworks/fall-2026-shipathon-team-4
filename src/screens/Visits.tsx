@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { IconTrash } from '../components/Icons';
+import { CasePatterns } from '../components/CasePatterns';
 import { Chip, ConfirmButton } from '../components/ui';
 import { daysUntil, formatDate, formatShort, todayISO } from '../lib/dates';
 import { hasCrisisLanguage } from '../lib/safety';
@@ -286,6 +287,7 @@ export function VisitHistory() {
             <Link to="/case/add" className="link-btn no-print" style={{ alignSelf: 'flex-start' }}>+ Add a date (medication change, symptom…)</Link>
           </section>
         </div>
+        <CasePatterns />
       </div>
     </Shell>
   );
