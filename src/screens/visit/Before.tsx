@@ -666,6 +666,7 @@ export function ShareStep() {
   const [open, setOpen] = useState(true);
   const [tp, setTp] = useState(true);
   const [sum, setSum] = useState(true);
+  const [hist, setHist] = useState(false);
   const [days, setDays] = useState(7);
   const [made, setMade] = useState<string | null>(null);
   const [toast, showToast] = useToast();
@@ -673,7 +674,7 @@ export function ShareStep() {
   const active = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
 
   const create = async () => {
-    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum }), days);
+    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum, caseHistory: hist }), days);
     state.updateVisit(visit.id, { shared: true });
     setMade(linkUrl(l));
     try { await navigator.clipboard.writeText(linkUrl(l)); showToast('Link made and copied'); } catch { showToast('Link made'); }
@@ -703,6 +704,7 @@ export function ShareStep() {
           <div className="checklist">
             <div className="checklist__row"><Checkbox checked={tp} onChange={setTp}>Talking points</Checkbox></div>
             <div className="checklist__row"><Checkbox checked={sum} onChange={setSum}>Doctor summary</Checkbox></div>
+            <div className="checklist__row"><Checkbox checked={hist} onChange={setHist}>Case history (patterns, key dates, past visits)</Checkbox></div>
           </div>
           <div className="grid-2">
             <button className="btn btn--primary" disabled={!tp && !sum} onClick={create}>Create link</button>

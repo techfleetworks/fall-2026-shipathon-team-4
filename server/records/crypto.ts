@@ -32,7 +32,9 @@ export class DecryptError extends Error {
   }
 }
 
-const aad = (userId: string) => Buffer.from(`visit_records:v1:${userId}`, 'utf8');
+/** What each kind of envelope is bound to. A record to its owner; a shared brief to its link (ADR-020). */
+export const RECORD_CONTEXT = (userId: string) => `visit_records:v1:${userId}`;
+export const SHARE_CONTEXT = (tokenHash: string) => `shared_briefs:v1:${tokenHash}`;
 
 /** A key from its base64 setting. undefined if missing or not exactly 32 bytes. */
 export function parseKey(b64: string | undefined): RecordKey | undefined {
@@ -51,19 +53,27 @@ export function recordKeysFromEnv(env: NodeJS.ProcessEnv = process.env): RecordK
   return previous && previous.kid !== current.kid ? { current, previous } : { current };
 }
 
-export function encryptRecord(record: unknown, userId: string, keys: RecordKeys): Envelope {
+export const encryptRecord = (record: unknown, userId: string, keys: RecordKeys): Envelope => encryptJson(record, RECORD_CONTEXT(userId), keys);
+export const decryptRecord = (envelope: unknown, userId: string, keys: RecordKeys): unknown => decryptJson(envelope, RECORD_CONTEXT(userId), keys);
+
+/** True if `v` has the shape of an envelope (used to tell encrypted shared briefs from older plain ones). */
+export function isEnvelope(v: unknown): v is Envelope {
+  const e = v as Partial<Envelope> | null;
+  return !!e && typeof e === 'object' && e.v === 1 && e.alg === 'A256GCM' && typeof e.kid === 'string' && typeof e.iv === 'string' && typeof e.ct === 'string' && typeof e.tag === 'string';
+}
+
+/** Encrypts any JSON value, bound to `context` (it must be given again to decrypt). */
+export function encryptJson(value: unknown, context: string, keys: RecordKeys): Envelope {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', keys.current.key, iv);
-  cipher.setAAD(aad(userId));
-  const ct = Buffer.concat([cipher.update(JSON.stringify(record), 'utf8'), cipher.final()]);
+  cipher.setAAD(Buffer.from(context, 'utf8'));
+  const ct = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
   return { v: 1, alg: 'A256GCM', kid: keys.current.kid, iv: iv.toString('base64'), ct: ct.toString('base64'), tag: cipher.getAuthTag().toString('base64') };
 }
 
-export function decryptRecord(envelope: unknown, userId: string, keys: RecordKeys): unknown {
-  const e = envelope as Partial<Envelope> | null;
-  if (!e || e.v !== 1 || e.alg !== 'A256GCM' || typeof e.kid !== 'string' || typeof e.iv !== 'string' || typeof e.ct !== 'string' || typeof e.tag !== 'string') {
-    throw new DecryptError('malformed');
-  }
+export function decryptJson(envelope: unknown, context: string, keys: RecordKeys): unknown {
+  if (!isEnvelope(envelope)) throw new DecryptError('malformed');
+  const e = envelope;
   const k = [keys.current, keys.previous].find((x) => x?.kid === e.kid);
   if (!k) throw new DecryptError('unknown-key');
   const iv = Buffer.from(e.iv, 'base64');
@@ -71,7 +81,7 @@ export function decryptRecord(envelope: unknown, userId: string, keys: RecordKey
   if (iv.length !== 12 || tag.length !== 16) throw new DecryptError('malformed');
   try {
     const decipher = createDecipheriv('aes-256-gcm', k.key, iv);
-    decipher.setAAD(aad(userId));
+    decipher.setAAD(Buffer.from(context, 'utf8'));
     decipher.setAuthTag(tag);
     const plain = Buffer.concat([decipher.update(Buffer.from(e.ct, 'base64')), decipher.final()]).toString('utf8');
     return JSON.parse(plain);

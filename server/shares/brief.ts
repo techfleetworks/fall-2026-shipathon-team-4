@@ -7,7 +7,7 @@
  * Crisis language anywhere means the brief is not shared (the caller shows crisis support instead).
  */
 import { hasCrisisLanguage } from '../../src/lib/safety.js';
-import type { BriefSnapshot } from '../../src/lib/types.js';
+import type { BriefSnapshot, CaseSnapshot } from '../../src/lib/types.js';
 
 /** What fits on one printed page (A1 layout in Brief.tsx). */
 export const ONE_PAGE = {
@@ -17,6 +17,17 @@ export const ONE_PAGE = {
   tried: 300,
   timeline: { max: 5, chars: 200 },
   askingFor: { max: 5, chars: 120 },
+} as const;
+
+/** The shareable record (ADR-020): the case history, a second page after the one-page brief. */
+export const CASE_PAGE = {
+  presenting: { max: 10, chars: 200 },
+  course: { max: 6, chars: 300 },
+  medications: { max: 10, chars: 200 },
+  patterns: { max: 5, chars: 500 },
+  openItems: { max: 5, chars: 300 },
+  keyDates: { max: 6, chars: 250 },
+  visits: { max: 10, clinician: 100 },
 } as const;
 
 /** Anything beyond these is not a real brief: rejected instead of trimmed. */
@@ -76,9 +87,40 @@ export function buildOnePageBrief(input: unknown): BriefParse {
     askingFor: list(input.askingFor, ONE_PAGE.askingFor.max, (a) => text(a, ONE_PAGE.askingFor.chars), true).filter(Boolean),
     demo: flag(input.demo) === true,
   };
+
+  // The optional case history (ADR-020): the same rules, its own caps.
+  if (input.case !== undefined) {
+    const c = input.case;
+    if (!isObj(c)) bad = true;
+    else {
+      const lines = (v: unknown, cap: { max: number; chars: number }) => list(v, cap.max, (x) => text(x, cap.chars), true).filter(Boolean);
+      const snapshot: CaseSnapshot = {
+        presenting: lines(c.presenting, CASE_PAGE.presenting),
+        course: lines(c.course, CASE_PAGE.course),
+        medications: lines(c.medications, CASE_PAGE.medications),
+        patterns: lines(c.patterns, CASE_PAGE.patterns),
+        openItems: lines(c.openItems, CASE_PAGE.openItems),
+        keyDates: list(c.keyDates, CASE_PAGE.keyDates.max, (k) => {
+          if (!isObj(k) || typeof k.date !== 'string' || !DATE.test(k.date)) { bad = true; return { date: '', text: '' }; }
+          return { date: k.date, text: text(k.text, CASE_PAGE.keyDates.chars) };
+        }, true).filter((k) => k.text),
+        visits: list(c.visits, CASE_PAGE.visits.max, (x) => {
+          if (!isObj(x) || typeof x.date !== 'string' || !DATE.test(x.date)) { bad = true; return { date: '' }; }
+          const fh = x.feltHeard;
+          if (fh !== undefined && (typeof fh !== 'number' || !Number.isInteger(fh) || fh < 1 || fh > 5)) bad = true;
+          const clinician = text(x.clinician, CASE_PAGE.visits.clinician, true);
+          return { date: x.date, ...(clinician ? { clinician } : {}), ...(typeof fh === 'number' ? { feltHeard: fh } : {}) };
+        }, true),
+      };
+      const hasAny = Object.values(snapshot).some((v) => v.length > 0);
+      if (hasAny) brief.case = snapshot;
+    }
+  }
   if (bad) return { ok: false, reason: 'invalid' };
 
-  const allText = [brief.who, ...brief.priorities, ...brief.symptoms.flatMap((s) => [s.label, s.clinical, s.quote]), brief.tried, ...brief.timeline.map((e) => e.detail), ...brief.askingFor];
+  const c = brief.case;
+  const caseText = c ? [...c.presenting, ...c.course, ...c.medications, ...c.patterns, ...c.openItems, ...c.keyDates.map((k) => k.text), ...c.visits.map((v) => v.clinician)] : [];
+  const allText = [brief.who, ...brief.priorities, ...brief.symptoms.flatMap((s) => [s.label, s.clinical, s.quote]), brief.tried, ...brief.timeline.map((e) => e.detail), ...brief.askingFor, ...caseText];
   if (hasCrisisLanguage(...allText)) return { ok: false, reason: 'crisis' };
   if (!brief.priorities.length && !brief.symptoms.length && !brief.askingFor.length && !(brief.tried && brief.tried !== 'Not discussed')) {
     return { ok: false, reason: 'empty' };

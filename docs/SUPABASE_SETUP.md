@@ -114,5 +114,7 @@ Do this in **both** projects (real and DEMO). The demo never saves records (Theo
 4. **Back the key up** in the team's password manager. **If the key is lost, saved records can't be read by anyone, ever.**
 5. Changing the key later: move the old one to `RECORD_ENCRYPTION_KEY_PREVIOUS`, put the new one in `RECORD_ENCRYPTION_KEY`, redeploy.
    Records still open with the old key and move to the new one the next time they're saved.
-6. Check: with sync turned on in the app (next PR), **Table Editor → visit_records** shows rows whose `envelope` is unreadable
+6. **Sharing with doctors needs this key too** (ADR-020): shared briefs, which can include the case history, are stored encrypted with it.
+   Without the key, sharing answers 503 and nothing is stored.
+7. Check: with sync turned on in the app (next PR), **Table Editor → visit_records** shows rows whose `envelope` is unreadable
    (`ct`, `iv`, `tag`), never health words.

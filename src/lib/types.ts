@@ -183,6 +183,22 @@ export interface BriefSnapshot {
   timeline: { date: string; detail: string }[];
   askingFor: string[];
   demo: boolean;
+  /** The shareable record (ADR-020): the case in doctor terms, frozen when the link was made. Only if the patient included it. */
+  case?: CaseSnapshot;
+}
+
+/** The case as the doctor reads it (Case view, ADR-017), frozen into a shared brief. Clinical lines only, no ids. */
+export interface CaseSnapshot {
+  presenting: string[];
+  course: string[];
+  medications: string[];
+  /** Patterns across visits, in doctor terms ("Symptom onset … Temporal association only."). */
+  patterns: string[];
+  /** Still open: overdue follow-ups, talking points never addressed. */
+  openItems: string[];
+  keyDates: { date: string; text: string }[];
+  /** Past visits, oldest first. */
+  visits: { date: string; clinician?: string; feltHeard?: number }[];
 }
 
 export interface ShareLink {

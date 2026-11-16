@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SharedCase } from '../components/SharedCase';
 import { IconDown, IconGrip, IconTrash, IconUp } from '../components/Icons';
 import { formatDate, formatShort } from '../lib/dates';
 import { hasCrisisLanguage } from '../lib/safety';
@@ -136,6 +137,7 @@ export function DoctorBriefBody({ data, showTimeline = false, variant = 'room' }
           )}
         </div>
       </div>
+      {data.case && <SharedCase data={data.case} />}
       {data.demo && <p className="small muted">Synthetic — illustrative only, not medical advice.</p>}
     </div>
   );
