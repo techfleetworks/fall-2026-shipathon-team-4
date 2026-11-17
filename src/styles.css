@@ -582,10 +582,16 @@ a.tasks__item:hover { border-color: var(--primary); }
 .header-988--phone { margin-right: 8px; }
 @media (min-width: 900px) { .header-988--phone { display: none; } }
 .header--brand .header__end { display: flex; align-items: center; }
-/* Room for the header crisis link on small phones: abbreviate the app name (Appt Ready). */
-@media (max-width: 400px) {
-  .header--brand .brand-full { display: none; }
-  .header--brand .brand-short { display: inline; }
+/* H1 header: logo beside the app name in dark ink (matches the mock-up). */
+.header--brand .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
+.header--brand .brand-mark { width: 40px; height: 36px; flex: none; }
+/* Log out sits beside the avatar on wide screens; on phones it stays in the avatar menu. */
+.header-logout { display: none; min-height: 40px; padding: 8px 18px; margin-right: 14px; border-radius: 10px; }
+@media (min-width: 900px) { .header-logout { display: inline-flex; } }
+/* Phones: logo only, so the crisis link and avatar always fit. */
+@media (max-width: 480px) {
+  .header--brand .brand-full, .header--brand .brand-short { display: none; }
+  .header--brand .brand-mark { width: 34px; height: 30px; }
 }
 .subtabs .short { display: none; }
 @media (max-width: 520px) {
@@ -984,3 +990,38 @@ a.tasks__item:hover { border-color: var(--primary); }
 .feelings-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .feelings-more__group { display: flex; flex-direction: column; gap: 8px; }
 @media (max-width: 760px) { .feelings-more { grid-template-columns: 1fr; } }
+
+/* ======================================================================
+   H1 · Home dashboard
+   ====================================================================== */
+.main:has(> .home) { max-width: 1180px; }
+.home { display: flex; flex-direction: column; gap: 20px; }
+.home h1 { font-size: 2rem; }
+.home-grid { display: grid; grid-template-columns: 1.65fr 1fr; gap: 24px; align-items: stretch; }
+.home-grid > * { min-width: 0; }
+.home-next { gap: 14px; }
+.home-next__title { font-size: 1.35rem; font-weight: 600; margin: 0; line-height: 1.35; }
+.home-visit { gap: 10px; }
+.home-visit__when { font-size: 1.45rem; font-weight: 600; margin: 0; }
+.home-progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+.home-progress span { height: 6px; border-radius: 99px; background: #e6e2d8; }
+.home-progress span.on { background: var(--primary); }
+.home-activity { list-style: none; margin: 0; padding: 0; }
+.home-activity li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line-card); }
+.home-activity li:last-child { border-bottom: 0; padding-bottom: 0; }
+.home-activity a { color: var(--ink); text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-activity a:hover { color: var(--primary); text-decoration: underline; }
+.home-activity li > span { flex: none; font-size: 0.95rem; }
+.home-tip { gap: 10px; }
+.home-tip__title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.home-tip__open { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; padding: 8px 0; }
+@media (max-width: 860px) {
+  .home-grid { grid-template-columns: 1fr; }
+  .home h1 { font-size: 1.6rem; }
+}
+/* Wide screens: a taller header like the H1 mock-up, and the crisis link underlined like the public site. */
+@media (min-width: 900px) {
+  :root { --header-h: 72px; }
+  .header--brand { padding: 0 24px; }
+  .pub-help--app { text-decoration: underline; text-underline-offset: 3px; margin-right: 24px; }
+}

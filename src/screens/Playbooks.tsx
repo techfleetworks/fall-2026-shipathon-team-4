@@ -14,15 +14,15 @@ import { ScriptCard } from './Scripts';
 
 /* ---------- shared bits ---------- */
 
-/** Playbooks header + in-page tabs: AI-generated playbooks · Others' playbooks (site map). */
+/** Tips (formerly Playbooks) header + in-page tabs: Made for you · From others (PB1, site map). */
 function PlaybooksLayout({ tab, children }: { tab: 'mine' | 'others'; children: ReactNode }) {
   return (
     <Shell header={{ kind: 'brand' }} tabs>
       <div className="pb-page">
-        <h1>Playbooks</h1>
-        <nav className="tabs tabs--links" aria-label="Playbooks">
-          <Link to="/playbooks" aria-current={tab === 'mine' ? 'page' : undefined}>AI-generated playbooks</Link>
-          <Link to="/playbooks/others" aria-current={tab === 'others' ? 'page' : undefined}>Others’ playbooks</Link>
+        <h1>Tips</h1>
+        <nav className="tabs tabs--links" aria-label="Tips">
+          <Link to="/playbooks" aria-current={tab === 'mine' ? 'page' : undefined}>Made for you</Link>
+          <Link to="/playbooks/others" aria-current={tab === 'others' ? 'page' : undefined}>From others</Link>
         </nav>
         {children}
       </div>
@@ -126,7 +126,7 @@ export function MyPlaybooks() {
     <PlaybooksLayout tab="mine">
       <div className="pb-grid">
         <section className="panel panel--accent pb-make" aria-labelledby="make-title">
-          <h2 id="make-title" className="panel-title">Make a playbook for my visit</h2>
+          <h2 id="make-title" className="panel-title">Make a tip for my visit</h2>
           {basedOn && <p className="small muted">Based on “{basedOn.title}”, with your own details.</p>}
           <div className="field">
             <label htmlFor="worry">What are you worried might happen?</label>
@@ -143,14 +143,14 @@ export function MyPlaybooks() {
               <option value="">{upcoming.length ? 'Not for a specific visit' : 'No upcoming visit yet'}</option>
             </select>
           </div>
-          <button className="btn btn--primary btn--lg" style={{ alignSelf: 'flex-start' }} onClick={make}>Make my playbook</button>
+          <button className="btn btn--primary btn--lg" style={{ alignSelf: 'flex-start' }} onClick={make}>Make my tip</button>
         </section>
 
         <div className="pb-side">
           <section className="panel" aria-labelledby="saved-title">
-            <h2 id="saved-title" className="eyebrow-soft">Saved playbooks</h2>
+            <h2 id="saved-title" className="eyebrow-soft">Saved tips</h2>
             {list.length === 0 ? (
-              <p className="small muted">None yet. Playbooks you make are saved here.</p>
+              <p className="small muted">None yet. Tips you make are saved here.</p>
             ) : (
               <ul className="pb-saved">
                 {list.map((p) => <SavedRow key={p.id} p={p} visits={visits} />)}
@@ -208,7 +208,7 @@ export function NewPlaybook() {
   };
 
   return (
-    <PlaybookPage crumbs={[{ label: 'Playbooks', to: '/playbooks' }, { label: 'AI-generated', to: '/playbooks' }, { label: 'Draft' }]}>
+    <PlaybookPage crumbs={[{ label: 'Tips', to: '/playbooks' }, { label: 'Made for you', to: '/playbooks' }, { label: 'Draft' }]}>
       <div className="pb-narrow">
         <span className="eyebrow-soft">Draft{visit ? ` · for ${visitLabel(visit)}` : ''}</span>
         <h1>{draft.title}</h1>
@@ -219,7 +219,7 @@ export function NewPlaybook() {
           </div>
         )}
         <PlaybookBody p={draft} />
-        <button className="btn btn--primary btn--block" onClick={save}>Save playbook</button>
+        <button className="btn btn--primary btn--block" onClick={save}>Save tip</button>
         <p className="small muted">
           Built from what you’ve saved.{visit ? ' Saving adds these to that visit’s talking points.' : ''} Change your priorities in your <Link to="/brief">visit brief</Link>.
         </p>
@@ -271,18 +271,18 @@ export function MyPlaybookDetail() {
   const deletePlaybook = useApp((s) => s.deletePlaybook);
   if (!p) return <Navigate to="/playbooks" replace />;
   return (
-    <PlaybookPage crumbs={[{ label: 'Playbooks', to: '/playbooks' }, { label: 'AI-generated', to: '/playbooks' }, { label: p.title }]}>
+    <PlaybookPage crumbs={[{ label: 'Tips', to: '/playbooks' }, { label: 'Made for you', to: '/playbooks' }, { label: p.title }]}>
       <div className="pb-narrow">
         <h1>{p.title}</h1>
         <Link to={`/playbooks/mine/${p.id}/practice`} className="btn btn--primary btn--block">Practice it</Link>
         <PlaybookBody p={p} />
         <ConfirmButton
           className="btn btn--block btn--outline-danger"
-          question="Delete this playbook?"
+          question="Delete this tip?"
           confirmLabel="Delete"
           onConfirm={() => { deletePlaybook(p.id); navigate('/playbooks', { replace: true }); }}
         >
-          <IconTrash width={16} height={16} /> Delete playbook
+          <IconTrash width={16} height={16} /> Delete tip
         </ConfirmButton>
       </div>
     </PlaybookPage>
@@ -322,7 +322,7 @@ export function PracticePlaybook() {
   };
 
   return (
-    <PlaybookPage crumbs={[{ label: 'Playbooks', to: '/playbooks' }, { label: 'AI-generated', to: '/playbooks' }, { label: p.title, to: `/playbooks/mine/${p.id}` }]}>
+    <PlaybookPage crumbs={[{ label: 'Tips', to: '/playbooks' }, { label: 'Made for you', to: '/playbooks' }, { label: p.title, to: `/playbooks/mine/${p.id}` }]}>
       <div className="pb-grid pb-grid--practice">
         <section className="panel pb-practice" aria-live="polite">
           <span className="eyebrow-soft">{done ? 'Practice · All done' : `Practice · Step ${i + 1} of ${steps.length}`}</span>
@@ -415,8 +415,8 @@ export function OthersPlaybooks() {
   return (
     <PlaybooksLayout tab="others">
       <div className="pb-filterbar">
-        <label htmlFor="pb-q" className="sr-only">Search playbooks</label>
-        <input id="pb-q" className="input search" type="search" placeholder="Search playbooks" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <label htmlFor="pb-q" className="sr-only">Search tips</label>
+        <input id="pb-q" className="input search" type="search" placeholder="Search tips" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="chips--soft pb-quick">
           <div className="chips">
             <Chip selected={condition === QUICK_CONDITION} onClick={() => setFilter('condition', condition === QUICK_CONDITION ? undefined : QUICK_CONDITION)}>Depression</Chip>
@@ -446,7 +446,7 @@ export function OthersPlaybooks() {
       </p>
 
       {list.length === 0 ? (
-        <p className="muted">No playbooks match. Try another word or clear a filter.</p>
+        <p className="muted">No tips match. Try another word or clear a filter.</p>
       ) : (
         <div className="pb-cards">
           {list.map((p) => (
@@ -493,7 +493,7 @@ export function OthersPlaybookDetail() {
     .map(({ x }) => x);
 
   return (
-    <PlaybookPage crumbs={[{ label: 'Playbooks', to: '/playbooks' }, { label: 'Others’ playbooks', to: '/playbooks/others' }]}>
+    <PlaybookPage crumbs={[{ label: 'Tips', to: '/playbooks' }, { label: 'From others', to: '/playbooks/others' }]}>
       <div className="pb-grid pb-grid--detail">
         <div className="pb-detail">
           <h1>“{p.title}”</h1>
@@ -570,14 +570,14 @@ export function RatePlaybook() {
       <h1>Did it help?</h1>
       <p className="lead">Your rating helps the next person walk in prepared.</p>
       <div className="field">
-        <label htmlFor="pb">Which playbook?</label>
+        <label htmlFor="pb">Which tip?</label>
         <select id="pb" className="select input" value={playbookId ?? ''} onChange={(e) => setPlaybookId(e.target.value || undefined)}>
           <option value="">A script or something else</option>
           {PLAYBOOKS.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
         </select>
       </div>
       <div className="field">
-        <span className="label">{playbook ? 'Did this playbook help?' : 'Did it help?'}</span>
+        <span className="label">{playbook ? 'Did this tip help?' : 'Did it help?'}</span>
         <ChipSelect label="Did it help" options={['Yes', 'A little', 'No']} value={rating} onChange={(v) => setRating(v as SharedTip['rating'])} />
       </div>
       <div className="field">

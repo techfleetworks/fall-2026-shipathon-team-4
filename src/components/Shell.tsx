@@ -3,13 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../lib/store';
 import { IconBack, IconBook, IconCalendar, IconClose, IconGear, IconHome } from './Icons';
 import { APP_NAME } from '../lib/brand';
-import { Brand } from './Brand';
+import { Brand, BrandMark } from './Brand';
 
-/** Site map: logged-in top navigation is Home · Visits · Playbooks · Settings. */
+/** Site map: logged-in top navigation is Home · Visits · Tips · Settings. (Tips lives at /playbooks.) */
 const TABS = [
   { to: '/home', label: 'Home', Icon: IconHome, match: ['/home'] },
   { to: '/visits', label: 'Visits', Icon: IconCalendar, match: ['/visits', '/story', '/case', '/brief', '/today', '/follow-up', '/escalation'] },
-  { to: '/playbooks', label: 'Playbooks', Icon: IconBook, match: ['/playbooks', '/scripts'] },
+  { to: '/playbooks', label: 'Tips', Icon: IconBook, match: ['/playbooks', '/scripts'] },
   { to: '/settings', label: 'Settings', Icon: IconGear, match: ['/settings'] },
 ];
 
@@ -66,7 +66,7 @@ function BrandHeader() {
   const active = useActiveTab();
   return (
     <header className="header header--brand">
-      <Link to={signedIn ? '/home' : '/'} className="brand" aria-label={`${APP_NAME} home`}><Brand /></Link>
+      <Link to={signedIn ? '/home' : '/'} className="brand" aria-label={`${APP_NAME} home`}><BrandMark /><Brand /></Link>
       {signedIn ? (
         <nav className="topnav" aria-label="Main">
           {TABS.map((t) => (
@@ -130,6 +130,7 @@ function AccountMenu() {
     <div ref={ref} className="header__end">
       <Link to="/help-now" className="pub-help pub-help--app" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
       <Link to="/help-now" className="header-link header-988 header-988--phone" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
+      <button className="btn btn--outline header-logout" onClick={() => { signOut(); navigate('/', { replace: true }); }}>Log out</button>
       <button className="avatar" aria-label="Account menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {initial}
       </button>

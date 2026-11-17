@@ -16,7 +16,7 @@ const SECTIONS = [
   { slug: 'profile', label: 'Profile' },
   { slug: 'privacy', label: 'Privacy and data' },
   { slug: 'notifications', label: 'Notifications' },
-  { slug: 'install', label: 'Save to Homescreen' },
+  { slug: 'install', label: 'Add to home screen' },
 ] as const;
 type Slug = (typeof SECTIONS)[number]['slug'];
 
@@ -281,7 +281,7 @@ function NotificationsSection() {
   );
 }
 
-/* ---------- Save to Homescreen (install the app) ---------- */
+/* ---------- Add to home screen (install the app) ---------- */
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -317,7 +317,7 @@ function InstallSection() {
 
   return (
     <>
-      <h1>Save to Homescreen</h1>
+      <h1>Add to home screen</h1>
       <p className="pub-sub">Add {APP_NAME} to your home screen so it opens like an app and works offline.</p>
       {installed ? (
         <section className="pcard"><p><strong>It’s installed.</strong> You’re using the app version right now.</p></section>
