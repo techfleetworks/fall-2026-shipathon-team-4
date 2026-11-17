@@ -10,6 +10,7 @@ import { playDemoVisit } from '../../lib/demoApi';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { useApp } from '../../lib/store';
 import { useLiveTranscript } from '../../lib/transcript/useLiveTranscript';
+import { detectCues } from '../../lib/cues/cues';
 import { DoctorBriefBody } from '../Brief';
 import { Modal, useVisitParam, VisitLayout } from './common';
 
@@ -26,6 +27,9 @@ export function AtVisit() {
   const [docAgrees, setDocAgrees] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [scriptId, setScriptId] = useState<string>();
+  const [dismissedCues, setDismissedCues] = useState<string[]>([]);
+  const evidence = useApp((s) => s.evidence);
+  const visits = useApp((s) => s.visits);
   if (!visit) return <Navigate to="/visits" replace />;
 
   const decided = !!visit.recording;
@@ -35,6 +39,16 @@ export function AtVisit() {
   const nextUp = visit.priorities.find((p) => !covered.includes(p));
   // Crisis words typed in quick notes OR heard while recording (ADR-021) show the 988 support right away.
   const notesCrisis = hasCrisisLanguage(visit.notes, ...(visit.live?.segments ?? []));
+  // Be-believed cues (ADR-022): playbook lines for dismissing moments heard live or typed in quick notes.
+  const medChange = evidence.filter((e) => e.type === 'medication').sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const lastVisit = visits.filter((v) => v.id !== visit.id && v.date < visit.date).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const heard = detectCues([...(visit.live?.segments ?? []), ...(visit.notes ?? '').split(/\n+/)], {
+    priorities: visit.priorities,
+    covered,
+    latestMedChange: medChange && { label: medChange.detail, date: medChange.date },
+    lastVisitDate: lastVisit?.date,
+    dismissed: dismissedCues,
+  });
 
   const start = () => {
     updateVisit(visit.id, { recording: 'agreed' });
@@ -78,6 +92,13 @@ export function AtVisit() {
                 ))}
               </div>
             )}
+            {/* Talking points that seem to have come up (ADR-022). A suggestion only: the person ticks it. */}
+            {heard.coveredSuggestions.map((p) => (
+              <p key={p} className="small" style={{ margin: 0 }}>
+                Sounds like “{p}” came up.{' '}
+                <button className="link-btn" onClick={() => updateVisit(visit.id, { covered: [...covered, p] })}>Mark covered</button>
+              </p>
+            ))}
           </section>
 
           <section className="panel">
@@ -92,6 +113,16 @@ export function AtVisit() {
               </div>
             )}
           </section>
+
+          {/* Be-believed cues (ADR-022): what was heard, and the matching playbook line to say. Newest first. */}
+          {heard.cues.map((c) => (
+            <section key={c.id} className="panel panel--muted" aria-live="polite">
+              <span className="eyebrow-soft">Heard: “{c.heard}”</span>
+              <p style={{ margin: 0 }}><strong>{c.situation}</strong>. You could say:</p>
+              <div className="bubble">“{c.say}”</div>
+              <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setDismissedCues((d) => [...d, c.id])}>Got it</button>
+            </section>
+          ))}
 
           {nextUp && (
             <section className="panel panel--muted" aria-live="polite">
