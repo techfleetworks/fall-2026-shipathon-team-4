@@ -18,7 +18,8 @@ function Lines({ label, lines }: { label: string; lines: string[] }) {
 
 export function SharedCase({ data }: { data: CaseSnapshot }) {
   return (
-    <section aria-labelledby="case-h" className="stack-sm" style={{ marginTop: 24 }}>
+    // breakBefore: printed, the case history starts on page 2 (the brief stays one page). No effect on screen.
+    <section aria-labelledby="case-h" className="stack-sm" style={{ marginTop: 24, breakBefore: 'page' }}>
       <h2 id="case-h" className="room__who" style={{ fontSize: '1.25rem' }}>Case history</h2>
       <p className="small muted" style={{ margin: 0 }}>Patient-reported, from their dated record in the app. Patterns show timing, not cause.</p>
       <div className="room__grid room__grid--one">
