@@ -5,6 +5,7 @@ import { Checkbox } from '../../components/ui';
 import { SCRIPTS } from '../../data/scripts';
 import { APP_NAME } from '../../lib/brand';
 import { buildBriefSnapshot } from '../../lib/brief';
+import { fitToOnePage } from '../../lib/onePageBrief';
 import { planAfterVisitUpdate } from '../../lib/afterVisit/useAfterVisitSummary';
 import { playDemoVisit } from '../../lib/demoApi';
 import { hasCrisisLanguage } from '../../lib/safety';
@@ -292,7 +293,10 @@ export function ShowInRoom() {
   }, [printMode]);
 
   if (!visit) return <Navigate to="/visits" replace />;
-  const include = { talkingPoints: params.get('tp') !== '0', summary: params.get('sum') !== '0' };
+  const include = { talkingPoints: params.get('tp') !== '0', summary: params.get('sum') !== '0', caseHistory: params.get('hist') === '1' };
+  // Download PDF: the same one-page rules as shared links (src/lib/onePageBrief.ts); case history prints as page 2.
+  const brief = buildBriefSnapshot(state, visit, include);
+  const shown = printMode ? fitToOnePage(brief).brief : brief;
   const exit = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     navigate(printMode ? `/visits/${visit.id}/before/share` : `/visits/${visit.id}/at`);
@@ -309,7 +313,7 @@ export function ShowInRoom() {
         </div>
       </header>
       <main id="main" className="room-main">
-        <DoctorBriefBody data={buildBriefSnapshot(state, visit, include)} />
+        <DoctorBriefBody data={shown} />
         <p className="small muted">Prepared by the patient with {APP_NAME}. Patient-reported.</p>
       </main>
     </div>

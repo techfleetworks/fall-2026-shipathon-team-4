@@ -367,6 +367,9 @@ classes. **All its wording is a first draft for you and Dominic.** It only shows
   one line in `DoctorBriefBody`): presenting symptoms, course, medications, patterns across visits, still open, key dates, past visits.
   It uses your `room__card` / `room__label` classes. **Headings are a first draft.**
 - New users with too little history: no case section is added (the brief is shared as before).
+- **Download PDF** now follows the same choices: with "Case history" ticked, the case prints as **page 2** (the brief stays one page).
+  The printed brief is fitted to one page with the same rules as shared links (`fitToOnePage` in `src/lib/onePageBrief.ts`;
+  the server re-exports it). Shared links now also keep the patient's name/age and **Daily impact** (they were dropped before).
 - When you wire the server sharing from 2e (`createShare`), pass the same snapshot: the server checks it, trims it, refuses crisis
   language, and stores it **encrypted**. Sharing on the server now needs `RECORD_ENCRYPTION_KEY` too (SUPABASE_SETUP step 10).
 
