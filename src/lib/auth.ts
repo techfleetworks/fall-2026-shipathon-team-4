@@ -104,3 +104,81 @@ export async function deleteServerAccount(fetchImpl: typeof fetch = fetch): Prom
     return { ok: false, message: SERVER_UNAVAILABLE_MESSAGE };
   }
 }
+
+// ---------------------------------------------------------------- password reset (ADR-023)
+
+/** The page the reset email links to. Must be in Supabase → Authentication → URL Configuration → Redirect URLs. */
+export const RESET_PATH = '/reset-password';
+
+/** Shown after "Send reset link" whatever happened, so the form can't be used to find out who has an account. */
+export const RESET_SENT_MESSAGE = 'If that email has an account, we sent a link to reset your password. It can take a few minutes; check your spam folder too.';
+
+type AuthClient = Pick<NonNullable<typeof supabase>, 'auth'>;
+
+/**
+ * Forgot password: asks Supabase to email a reset link that opens RESET_PATH on this site.
+ * Says the same thing whether or not the email has an account. Only a rate limit or a network problem is reported.
+ */
+export async function requestPasswordReset(
+  email: string,
+  { client = supabase, origin = typeof window !== 'undefined' ? window.location.origin : '' }: { client?: AuthClient | null; origin?: string } = {},
+): Promise<{ status: 'sent'; message: string } | { status: 'error'; message: string } | { status: 'not-configured' }> {
+  if (!client) return { status: 'not-configured' };
+  try {
+    const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${origin}${RESET_PATH}` });
+    const m = (error?.message ?? '').toLowerCase();
+    if (error && (m.includes('rate limit') || m.includes('too many') || m.includes('security purposes'))) {
+      return { status: 'error', message: 'Too many tries. Wait a few minutes and try again.' };
+    }
+    if (error && (m.includes('fetch') || m.includes('network'))) return { status: 'error', message: SERVER_UNAVAILABLE_MESSAGE };
+    return { status: 'sent', message: RESET_SENT_MESSAGE };
+  } catch {
+    return { status: 'error', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+}
+
+/** The same rules as sign-up. Returns the problem to show, or null if the new password is fine. */
+export function newPasswordProblem(password: string, confirm: string): string | null {
+  if (password.length < 8) return 'Use at least 8 characters for your password.';
+  if (password !== confirm) return 'Those passwords don’t match. Type the same password in both fields.';
+  return null;
+}
+
+/** True when this page was opened from a valid reset link (Supabase has a recovery session). */
+export async function hasRecoverySession({ client = supabase }: { client?: AuthClient | null } = {}): Promise<boolean> {
+  if (!client) return false;
+  try {
+    return !!(await client.auth.getSession()).data.session;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reset page: saves the new password, then signs out of the reset session so the person logs in normally
+ * (which also restores their backup on a new device, ADR-019).
+ */
+export async function setNewPassword(
+  password: string,
+  confirm: string,
+  { client = supabase }: { client?: AuthClient | null } = {},
+): Promise<{ status: 'ok' } | { status: 'error'; message: string } | { status: 'expired' } | { status: 'not-configured' }> {
+  if (!client) return { status: 'not-configured' };
+  const problem = newPasswordProblem(password, confirm);
+  if (problem) return { status: 'error', message: problem };
+  try {
+    if (!(await client.auth.getSession()).data.session) return { status: 'expired' };
+    const { error } = await client.auth.updateUser({ password });
+    if (error) {
+      const m = error.message.toLowerCase();
+      if (m.includes('different from the old') || m.includes('same password')) return { status: 'error', message: 'Choose a password you haven’t used for this account before.' };
+      if (m.includes('weak') || m.includes('at least')) return { status: 'error', message: 'Choose a stronger password: at least 8 characters.' };
+      if (m.includes('session') || m.includes('expired') || m.includes('jwt')) return { status: 'expired' };
+      return { status: 'error', message: 'We couldn’t save your new password. Please try again.' };
+    }
+    await client.auth.signOut().catch(() => undefined);
+    return { status: 'ok' };
+  } catch {
+    return { status: 'error', message: SERVER_UNAVAILABLE_MESSAGE };
+  }
+}

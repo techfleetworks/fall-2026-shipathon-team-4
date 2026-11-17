@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
-import { isServerAuthEnabled, logIn, signUp } from '../../lib/auth';
+import { isServerAuthEnabled, logIn, requestPasswordReset, signUp } from '../../lib/auth';
 import { fetchMyAppData } from '../../lib/demoApi';
 import { restoreBackupAfterLogin } from '../../lib/sync';
 import { SITE } from '../../lib/siteMode';
@@ -33,7 +33,19 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const [email, setEmail] = useState(theo?.email ?? '');
   const [password, setPassword] = useState(theo?.password ?? '');
   const [confirm, setConfirm] = useState('');
-  const [showReset, setShowReset] = useState(false);
+  const [showReset, setShowReset] = useState(params.get('reset') === '1');
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  // Password reset (ADR-023): only with server sign-in, and never on the demo site (Theo's shared account).
+  const canReset = isServerAuthEnabled() && SITE.mode !== 'demo';
+  const sendReset = async () => {
+    setResetMsg(null);
+    if (!EMAIL_RE.test(email.trim())) return setResetMsg('Enter your email address above first.');
+    setResetBusy(true);
+    const out = await requestPasswordReset(email);
+    setResetBusy(false);
+    setResetMsg(out.status === 'not-configured' ? 'Password reset isn’t available right now.' : out.message);
+  };
   const [error, setError] = useState<string | null>(null);
   // Also when arriving from another page that reuses this screen (e.g. the demo's sign-up notice → "Log in as Theo").
   useEffect(() => {
@@ -161,10 +173,21 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
                 </button>
               )}
             </div>
-            {mode === 'login' && showReset && (
+            {mode === 'login' && showReset && (canReset ? (
+              <div id="reset-note" className="stack-sm">
+                <p className="form-note" style={{ margin: 0 }}>We’ll email you a link to choose a new password. Use the email you signed up with, above.</p>
+                <button type="button" className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => void sendReset()} disabled={resetBusy} aria-busy={resetBusy}>
+                  {resetBusy ? 'Sending…' : 'Send reset link'}
+                </button>
+                {resetMsg && <p className="form-note" role="status" style={{ margin: 0 }}>{resetMsg}</p>}
+              </div>
+            ) : (
               <p id="reset-note" className="form-note" role="status">
                 Password reset isn’t available in this version yet. If you can’t remember your password, you’ll need to create a new account.
               </p>
+            ))}
+            {mode === 'login' && params.get('reset') === 'done' && (
+              <p className="form-note" role="status">Your password was changed. Log in with your new password.</p>
             )}
             {mode === 'signup' && (
               <div className="field">

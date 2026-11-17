@@ -393,6 +393,15 @@ Under your talking-points checklist: "Sounds like “X” came up. **Mark covere
 Logic: `detectCues()` in `src/lib/cues/cues.ts`. No new medical wording; the small labels ("Heard:", "You could say:", "Got it",
 "Mark covered") are drafts.
 
+## 2r. Forgot password (new, ADR-023)
+
+**Already wired, please review (design placeholder: "Fits: Log in → Forgot password").**
+- Log in → **"Forgot your password?"** now opens a small panel: "We'll email you a link…" + **Send reset link** (uses the email field above).
+  It always answers "If that email has an account, we sent a link…" so nobody can find out who has an account.
+- The email opens a new page, **`/reset-password`** (`src/screens/public/ResetPassword.tsx`, same layout as Log in): new password twice →
+  **Save new password** → back to Log in with "Your password was changed." An old link shows "This link has expired" + **Get a new link**.
+- Hidden on the demo site. Wording is a draft.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

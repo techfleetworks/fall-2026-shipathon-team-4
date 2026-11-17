@@ -6,6 +6,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Help } from './screens/Help';
 import { Home } from './screens/Home';
 import { AddEvidence } from './screens/MyCase';
+import { ResetPassword } from './screens/public/ResetPassword';
 import { Breathing, Escalation, FollowUpScreen } from './screens/VisitDay';
 import { ImportStandalone, VisitHistory, Visits } from './screens/Visits';
 import { RedirectVisitPath, ToVisit, VisitIndex } from './screens/visit/common';
@@ -69,6 +70,8 @@ export function App() {
         <Route path="/faq" element={<Faq />} />
         <Route path="/legal" element={<Navigate to="/legal/privacy" replace />} />
         <Route path="/legal/:doc" element={<Legal />} />
+        {/* Opened from the reset-password email (ADR-023). Outside PublicOnly: a reset can happen on a device where someone is signed in. */}
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/help-now" element={<Help />} />
         <Route path="/breathe" element={<Breathing />} />
 
