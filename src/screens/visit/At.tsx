@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { getRecognition, type SpeechRecognitionLike } from '../../components/TalkOrType';
+import { getRecognition } from '../../components/TalkOrType';
 import { Checkbox } from '../../components/ui';
 import { SCRIPTS } from '../../data/scripts';
 import { APP_NAME } from '../../lib/brand';
@@ -10,6 +10,7 @@ import { planAfterVisitUpdate } from '../../lib/afterVisit/useAfterVisitSummary'
 import { playDemoVisit } from '../../lib/demoApi';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { useApp } from '../../lib/store';
+import { useLiveTranscript } from '../../lib/transcript/useLiveTranscript';
 import { DoctorBriefBody } from '../Brief';
 import { Modal, useVisitParam, VisitLayout } from './common';
 
@@ -33,7 +34,8 @@ export function AtVisit() {
   const shown = SCRIPTS.find((s) => s.id === (scriptId ?? scripts[0])) ?? SCRIPTS[0];
   const covered = visit.covered ?? [];
   const nextUp = visit.priorities.find((p) => !covered.includes(p));
-  const notesCrisis = hasCrisisLanguage(visit.notes);
+  // Crisis words typed in quick notes OR heard while recording (ADR-021) show the 988 support right away.
+  const notesCrisis = hasCrisisLanguage(visit.notes, ...(visit.live?.segments ?? []));
 
   const start = () => {
     updateVisit(visit.id, { recording: 'agreed' });
@@ -46,6 +48,7 @@ export function AtVisit() {
         <div className="stack">
           {visit.recording === 'agreed' && (
             <CaptureBar
+              visitId={visit.id}
               running={capturing}
               setRunning={setCapturing}
               onStop={(sentences) => {
@@ -138,17 +141,29 @@ export function AtVisit() {
 }
 
 /**
- * Live capture with the browser's speech recognition. No audio is stored by us;
- * finished sentences go to the recap when you press Stop.
+ * Live capture with the browser's speech recognition. No audio is stored by us. Words show live as they're spoken, and
+ * each finished piece is saved on the device right away (useLiveTranscript, ADR-021), so nothing is lost if the page
+ * closes. Finished sentences go to the recap when you press Stop (or the next time this screen opens).
  */
-function CaptureBar({ running, setRunning, onStop }: { running: boolean; setRunning: (v: boolean) => void; onStop: (sentences: string[]) => void }) {
+function CaptureBar({ visitId, running, setRunning, onStop }: { visitId: string; running: boolean; setRunning: (v: boolean) => void; onStop: (sentences: string[]) => void }) {
   const Ctor = getRecognition();
   const [seconds, setSeconds] = useState(0);
   const [paused, setPaused] = useState(false);
   const [stopped, setStopped] = useState(!running);
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
-  const textRef = useRef('');
-  const finalRef = useRef('');
+  const [recovered, setRecovered] = useState(0);
+  const live = useLiveTranscript(visitId, Ctor, running && !paused && !stopped);
+
+  // Text saved by a recording that never reached Stop (the page closed): put it in the recap now, and say so.
+  useEffect(() => {
+    if (running) return;
+    const sentences = live.leftover();
+    if (sentences.length) {
+      onStop(sentences);
+      setRecovered(sentences.length);
+    }
+    // Only on first show.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!running || paused) return;
@@ -156,46 +171,22 @@ function CaptureBar({ running, setRunning, onStop }: { running: boolean; setRunn
     return () => clearInterval(t);
   }, [running, paused]);
 
-  useEffect(() => {
-    if (!running || paused || !Ctor) return;
-    const rec = new Ctor();
-    rec.lang = 'en-US';
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      let t = '';
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + '. ';
-      textRef.current = t;
-    };
-    let active = true;
-    rec.onend = () => {
-      finalRef.current += textRef.current;
-      textRef.current = '';
-      // Browsers end recognition after a silence; keep listening while recording.
-      if (active) { try { rec.start(); } catch { /* ignore */ } }
-    };
-    rec.onerror = () => undefined;
-    recRef.current = rec;
-    try { rec.start(); } catch { /* mic blocked */ }
-    return () => { active = false; rec.stop(); };
-  }, [running, paused, Ctor]);
-
   const stop = () => {
-    recRef.current?.stop();
     setRunning(false);
     setStopped(true);
-    const all = (finalRef.current + textRef.current).split(/(?<=[.?!])\s+/).map((s) => s.replace(/\.\s*$/, '').trim()).filter((s) => s.length > 3);
-    finalRef.current = '';
-    textRef.current = '';
-    onStop(all.map((s) => s.charAt(0).toUpperCase() + s.slice(1) + '.'));
+    // Listening ends when `stopped` turns the hook off; any unfinished words are kept by stop().
+    onStop(live.stop());
   };
 
   const mm = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   if (stopped) {
     return (
       <div className="rec-bar rec-bar--off">
-        <span><strong>Recording stopped</strong>{seconds ? ` · ${mm}` : ''}. Your recap is ready to check after the visit.</span>
-        <button className="btn btn--outline btn--sm" onClick={() => { setStopped(false); setPaused(false); setRunning(true); }}>Record again</button>
+        <span>
+          <strong>Recording stopped</strong>{seconds ? ` · ${mm}` : ''}. Your recap is ready to check after the visit.
+          {recovered > 0 && <span className="small muted" style={{ display: 'block' }}>We kept {recovered} sentence{recovered === 1 ? '' : 's'} from before the page closed and added them to your recap.</span>}
+        </span>
+        <button className="btn btn--outline btn--sm" onClick={() => { setStopped(false); setPaused(false); setRunning(true); setRecovered(0); }}>Record again</button>
       </div>
     );
   }
@@ -203,7 +194,9 @@ function CaptureBar({ running, setRunning, onStop }: { running: boolean; setRunn
     <div className="rec-bar" role="status">
       <span className={`rec-dot${paused ? ' rec-dot--paused' : ''}`} aria-hidden="true" />
       <span style={{ flex: 1 }}>
-        <strong>{paused ? 'Paused' : 'Recording'}</strong> · {mm} · both agreed
+        <strong>{paused ? 'Paused' : 'Recording'}</strong> · {mm} · both agreed{live.count > 0 && ` · ${live.count} saved`}
+        {/* Live words: shown as they're spoken, not read out by screen readers (they change constantly). */}
+        {!paused && live.interim && <span className="small muted" aria-live="off" style={{ display: 'block', fontStyle: 'italic' }}>Hearing: “{live.interim}”</span>}
         {!Ctor && <span className="small muted" style={{ display: 'block' }}>Live capture isn’t available in this browser. Your quick notes will feed the recap.</span>}
       </span>
       <button className="btn btn--outline btn--sm" onClick={() => setPaused(!paused)}>{paused ? 'Resume' : 'Pause'}</button>
