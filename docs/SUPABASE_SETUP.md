@@ -118,3 +118,14 @@ Do this in **both** projects (real and DEMO). The demo never saves records (Theo
    Without the key, sharing answers 503 and nothing is stored.
 7. Check: with sync turned on in the app (next PR), **Table Editor → visit_records** shows rows whose `envelope` is unreadable
    (`ct`, `iv`, `tag`), never health words.
+
+## 11. Forgot password (ADR-023)
+Real project only (the demo site hides password reset: Theo's shared account must never be reset).
+1. **Authentication → URL Configuration → Redirect URLs → Add URL:**
+   `https://fall-2026-shipathon-team-4.vercel.app/reset-password` and, for testing on your computer, `http://localhost:5173/reset-password`.
+   Also check **Site URL** is `https://fall-2026-shipathon-team-4.vercel.app`.
+2. **Authentication → Emails → Reset password:** read the template; the button must use `{{ .ConfirmationURL }}` (the default does).
+3. **Email sender:** Supabase's built-in one sends only a few emails an hour, which is fine for testing. Before real users, set up a custom SMTP
+   sender (**Authentication → Emails → SMTP Settings**). The same sender is needed for "Confirm email" (Verify email screen).
+4. Check: on the live site, Log in → "Forgot your password?" → type your email → **Send reset link** → open the email → choose a new password →
+   "Your password was changed" → log in with it.
