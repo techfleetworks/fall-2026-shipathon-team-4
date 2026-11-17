@@ -681,7 +681,7 @@ export function ShareStep() {
   };
   const pdf = () => {
     state.updateVisit(visit.id, { shared: true });
-    navigate(`/visits/${visit.id}/at/room?print=1&tp=${tp ? 1 : 0}&sum=${sum ? 1 : 0}`);
+    navigate(`/visits/${visit.id}/at/room?print=1&tp=${tp ? 1 : 0}&sum=${sum ? 1 : 0}&hist=${hist ? 1 : 0}`);
   };
 
   return (
