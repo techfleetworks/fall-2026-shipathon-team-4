@@ -133,6 +133,11 @@ export interface Visit {
   covered?: string[];
   /** A3: quick notes typed during the visit. */
   notes?: string;
+  /**
+   * A3: words captured live while recording, saved as each piece is finished (ADR-021), so nothing is lost if the page
+   * closes mid-visit. Moved into `recap` on Stop (or the next time the screen opens).
+   */
+  live?: { segments: string[]; updatedAt: string };
   /** F1: recap in plain words. */
   recap?: { doctorSaid: string[]; source: 'recording' | 'notes' | 'transcript'; updatedAt: string };
   /** Plain-language after-visit summary from the transcript or notes (ADR-011): raised / said / plan / not covered. */

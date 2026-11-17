@@ -370,6 +370,17 @@ classes. **All its wording is a first draft for you and Dominic.** It only shows
 - When you wire the server sharing from 2e (`createShare`), pass the same snapshot: the server checks it, trims it, refuses crisis
   language, and stores it **encrypted**. Sharing on the server now needs `RECORD_ENCRYPTION_KEY` too (SUPABASE_SETUP step 10).
 
+## 2p. Live transcript on At the visit (new, ADR-021)
+
+**Already wired, please review.** Your Recording bar (`CaptureBar` in `At.tsx`) keeps its layout and buttons, and now:
+- shows the words **live** as they're said: a small italic **"Hearing: “…”"** line under "Recording · 00:42 · both agreed",
+- shows **"· N saved"**: each finished piece is saved on the device right away (`visit.live`), so **nothing is lost if the page closes**,
+- on Stop (or the next time the screen opens after an interrupted recording) the saved pieces go into the recap, with a note:
+  "We kept N sentences from before the page closed and added them to your recap."
+- the 988 banner under Quick notes now also appears for crisis words heard while recording.
+
+Logic: `src/lib/transcript/live.ts` (state machine), `liveCapture.ts` (controller), `useLiveTranscript.ts` (hook). **Wording is a draft.**
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
