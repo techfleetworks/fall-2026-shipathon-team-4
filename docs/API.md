@@ -384,6 +384,15 @@ classes. **All its wording is a first draft for you and Dominic.** It only shows
 
 Logic: `src/lib/transcript/live.ts` (state machine), `liveCapture.ts` (controller), `useLiveTranscript.ts` (hook). **Wording is a draft.**
 
+## 2q. "Be-believed" cues on At the visit (new, ADR-022)
+
+**Already wired, please review.** When a dismissing moment is heard (live transcript) or typed (quick notes), e.g. "it's probably the
+depression" or "let's give it more time", a muted panel appears **above your Quiet tip**: "Heard: “…”", the playbook situation,
+"You could say:" and the **playbook line from `src/data/scripts.ts`** (blanks like `[change]` filled from the record), with **Got it**.
+Under your talking-points checklist: "Sounds like “X” came up. **Mark covered**" (never ticked automatically).
+Logic: `detectCues()` in `src/lib/cues/cues.ts`. No new medical wording; the small labels ("Heard:", "You could say:", "Got it",
+"Mark covered") are drafts.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the
