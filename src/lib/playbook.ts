@@ -47,7 +47,7 @@ export function draftPlaybook(s: AppData, req: PlaybookRequest = {}): Omit<MyPla
   const severity = field('severity');
   const reasons = s.profile?.reasons ?? [];
   const brushedOff = s.profile?.brushedOff;
-  const medChange = !!s.medications.length || /medic|dose|started|after/i.test(onset ?? '') || reasons.includes('Side effects from medicine');
+  const medChange = !!s.medications.length || /medic|dose|started|after/i.test(onset ?? '') || reasons.some((r) => r === 'Medicine effects' || r === 'Side effects from medicine');
 
   const priorities = visit?.priorities.length ? visit.priorities : (symptoms?.split('; ').slice(0, 3) ?? []);
   const lead = priorities[0] ?? symptoms?.split('; ')[0];
