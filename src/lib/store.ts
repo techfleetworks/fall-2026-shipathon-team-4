@@ -74,7 +74,8 @@ interface AppActions {
   setNotifications: (p: Partial<NotificationPrefs>) => void;
   savePlaybook: (p: Omit<MyPlaybook, 'id' | 'createdAt'>) => string;
   deletePlaybook: (id: string) => void;
-  createShareLink: (snapshot: ShareLink['snapshot'], days: number) => ShareLink;
+  /** The link lasts `days` from `startsAt` (e.g. the visit date), or from now if that is later or not given. */
+  createShareLink: (snapshot: ShareLink['snapshot'], days: number, startsAt?: Date) => ShareLink;
   revokeShareLink: (id: string) => void;
   /** Fills the app with Theo's demo data: from the server when given (ADR-010), else the built-in copy. */
   loadDemo: (data?: Partial<AppData>) => void;
@@ -157,8 +158,8 @@ export const useApp = create<AppData & AppActions>()(
 
       addVisit: (v) => {
         const id = uid();
-        // Only the next upcoming visit inherits talking points from the latest story.
-        set((s) => ({ visits: [...s.visits, { id, ...v, priorities: v.date >= todayISO() ? defaultPriorities(s) : [], askingFor: [] }] }));
+        // A new visit starts empty: every Before step is still to do.
+        set((s) => ({ visits: [...s.visits, { id, ...v, createdAt: new Date().toISOString(), priorities: [], askingFor: [] }] }));
         return id;
       },
       addFollowUp: (f) => set((s) => ({ followUps: [...s.followUps, { ...f, id: uid() }] })),
@@ -225,15 +226,16 @@ export const useApp = create<AppData & AppActions>()(
       },
       deletePlaybook: (id) => set((s) => ({ myPlaybooks: (s.myPlaybooks ?? []).filter((p) => p.id !== id) })),
 
-      createShareLink: (snapshot, days) => {
+      createShareLink: (snapshot, days, startsAt) => {
         const now = new Date();
+        const start = startsAt && startsAt.getTime() > now.getTime() ? startsAt : now;
         const bytes = crypto.getRandomValues(new Uint8Array(12));
         const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
         const link: ShareLink = {
           id: uid(),
           token,
           createdAt: now.toISOString(),
-          expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString(),
+          expiresAt: new Date(start.getTime() + days * 86_400_000).toISOString(),
           snapshot,
         };
         set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
@@ -278,6 +280,12 @@ export const SYNC_STORAGE_KEY = 'get-heard-sync';
 /** Has an account on this device AND hasn't logged out. */
 export const selectSignedIn = (s: Pick<AppData, 'profile' | 'signedIn'>) => !!s.profile?.onboarded && s.signedIn !== false;
 /** An account exists on this device (signed in or not). */
+/** The latest story, if it was saved for this visit (after the visit was added). Older visits without a date take any story. */
+export function selectVisitSummary(s: Pick<AppData, 'summaries'>, v: Pick<Visit, 'createdAt'>): CaseSummary | undefined {
+  const latest = selectLatestSummary(s);
+  return latest && (!v.createdAt || latest.createdAt >= v.createdAt) ? latest : undefined;
+}
+
 export const selectHasAccount = (s: Pick<AppData, 'profile'>) => !!s.profile?.onboarded;
 
 export function selectUpcomingVisit(s: Pick<AppData, 'visits'>): Visit | undefined {

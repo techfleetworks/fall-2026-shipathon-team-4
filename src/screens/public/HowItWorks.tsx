@@ -29,7 +29,7 @@ function PrioritiesPreview() {
 function RecapPreview() {
   return (
     <div className="mini">
-      <span className="mini-label">Visit recap</span>
+      <span className="mini-label">Visit summary</span>
       <ul className="mini-list">
         {['Start new med Thursday', 'Review in 2 weeks'].map((t) => (
           <li key={t}><span className="mini-check">✓</span>{t}</li>
@@ -49,14 +49,14 @@ const STEPS = [
   },
   {
     eyebrow: 'Step 2 · At the visit',
-    title: 'Show your summary',
-    body: 'Your top 3 priorities in large type. Playbooks help if you get brushed off.',
+    title: 'Show the notes for your doctor',
+    body: 'Your top 3 priorities in large type. Tips help if you get brushed off.',
     Preview: PrioritiesPreview,
   },
   {
     eyebrow: 'Step 3 · After the visit',
     title: 'Follow-up',
-    body: 'A recap, a 30-second check-in, and a reminder to take the next step.',
+    body: 'A visit summary, a 30-second check-in, and a reminder to take the next step.',
     Preview: RecapPreview,
   },
 ];

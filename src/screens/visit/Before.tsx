@@ -1,26 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useSpeechInput } from '../../components/TalkOrType';
-import { Checkbox, Chip, ChipMulti, ChipSelect, Disclaimer, useToast } from '../../components/ui';
+import { Checkbox, Chip, ChipMulti, useToast } from '../../components/ui';
 import { SCRIPTS } from '../../data/scripts';
 import { buildBriefSnapshot } from '../../lib/brief';
-import { formatDate, formatShort, todayISO, toISODate } from '../../lib/dates';
+import { shareEmailDraft } from '../../lib/shareEmail';
+import { addDays, formatDate, formatShort, parseISO, todayISO, toISODate } from '../../lib/dates';
 import { parseNotes, type FoundItem, type FoundKind } from '../../lib/importParse';
 import { draftPlaybook } from '../../lib/playbook';
 import { suggestQuestions } from '../../lib/questions/suggest';
 import { hasCrisisLanguage } from '../../lib/safety';
-import { isLinkActive, selectLatestSummary, useApp, useDraft } from '../../lib/store';
-import {
-  FREQUENCY_CHOICES,
-  IMPACT_CHOICES,
-  ONSET_CHOICES,
-  TRIED_CHOICES,
-  TRIGGER_CHOICES,
-} from '../../lib/translate';
+import { isLinkActive, selectLatestSummary, selectVisitSummary, useApp, useDraft } from '../../lib/store';
 import { requestPrepSummary } from '../../lib/api';
+import { translateStoryGuarded } from '../../lib/engine';
 import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
 import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
-import type { FieldKey, StoryDraft, Visit } from '../../lib/types';
+import type { FieldKey, ShareLink, StoryDraft, Visit } from '../../lib/types';
 import { Priorities, suggestionsFrom } from '../Brief';
 import { ShareLinkRow, linkUrl } from '../Visits';
 import { formatTime, Modal, prepFeelings, useVisitParam, VisitLayout } from './common';
@@ -29,25 +24,9 @@ import { formatTime, Modal, prepFeelings, useVisitParam, VisitLayout } from './c
    B1 · Name how I feel + see it in doctor terms + edit (side by side)
    ====================================================================== */
 
-const QUESTIONS = [
-  'What’s been going on, and when did it start?',
-  'How often does it happen?',
-  'How much is it affecting you?',
-  'What makes it better or worse?',
-  'What have you tried?',
-];
-
-/** The free-text part of each question, so crisis checks and "Talk" know what to touch. */
-function textOf(d: StoryDraft, q: number): string {
-  return [d.opening, d.frequency.text, d.severity.text, d.triggers.text, d.tried.text][q - 1] ?? '';
-}
-function withText(d: StoryDraft, q: number, text: string): Partial<StoryDraft> {
-  if (q === 1) return { opening: text };
-  if (q === 2) return { frequency: { ...d.frequency, text } };
-  if (q === 3) return { severity: { ...d.severity, text } };
-  if (q === 4) return { triggers: { ...d.triggers, text } };
-  return { tried: { ...d.tried, text } };
-}
+/** B1 has one question. Everything the person says goes into the story's opening, which the engine reads. */
+const QUESTION = 'How are you feeling?';
+const HINT = 'Describe your symptoms, how often it happens, how bad it is, and what you have tried so far.';
 
 /** Story with crisis text removed from every free-text answer (not just the current question). */
 function withoutCrisisText(d: StoryDraft): Partial<StoryDraft> {
@@ -66,24 +45,37 @@ function withoutCrisisText(d: StoryDraft): Partial<StoryDraft> {
 export function NameHowIFeel() {
   const visit = useVisitParam();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
   const { draft, update, reset } = useDraft();
   const saveSummary = useApp((s) => s.saveSummary);
   const latest = useApp(selectLatestSummary);
-  const q = Math.min(Math.max(Number(params.get('q')) || 1, 1), 5);
-  const setQ = (n: number) => setParams(n === 1 ? {} : { q: String(n) }, { replace: true });
+  // The story already saved for this visit: shown again when the person comes back to this step.
+  const saved = useApp((s) => (visit ? selectVisitSummary(s, visit) : undefined));
+  useEffect(() => {
+    if (!saved || useDraft.getState().draft.opening.trim()) return;
+    const overrides: Partial<Record<FieldKey, string>> = {};
+    saved.fields.forEach((f) => { if (f.editedByPatient) overrides[f.key] = f.clinical; });
+    update({ opening: saved.opening, overrides });
+  }, [visit?.id, saved?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const text = textOf(draft, q);
-  const { supported, listening, buttonProps } = useSpeechInput(text, (v) => update(withText(useDraft.getState().draft, q, v)));
+  const text = draft.opening;
+  const { supported, listening, toggleProps } = useSpeechInput(text, (v) => update({ opening: v }));
   const crisis = hasCrisisLanguage(text) || Object.values(draft.overrides ?? {}).some((o) => hasCrisisLanguage(o));
   // "Your doctor reads" comes from the backend server (engine + guardrails run there), after a short pause in typing.
   const preview = useServerSummary(draft);
-  const fields = useMemo(() => applyOverrides(preview.fields, draft.overrides), [preview.fields, draft.overrides]);
+  // Unchanged saved story: show what was saved while a fresh preview isn't available.
+  const unchanged = !!saved && draft.opening.trim() === saved.opening
+    && Object.entries(draft.overrides ?? {}).every(([k, v]) => saved.fields.find((f) => f.key === k)?.clinical === v);
+  const showSaved = unchanged && preview.status !== 'ok';
+  const fields = useMemo(
+    () => (showSaved && saved ? saved.fields : applyOverrides(preview.fields, draft.overrides)),
+    [showSaved, saved, preview.fields, draft.overrides],
+  );
   // Crisis anywhere in the story (any question, any rewrite), not just the question on screen.
   const anyCrisis = storyDraftHasCrisis(draft);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editing, setEditing] = useState<FieldKey | null>(null);
+  const [missing, setMissing] = useState(false);
 
   if (!visit) return <Navigate to="/visits" replace />;
 
@@ -91,86 +83,55 @@ export function NameHowIFeel() {
     update(withoutCrisisText(useDraft.getState().draft));
     navigate('/help/now', { replace: true });
   };
-  const next = async () => {
+  /**
+   * Saves what's on this page, then goes to `to`. Nothing typed: just goes (Continue asks for an answer first).
+   * The server builds the summary; if it can't be reached, the same engine and guardrails run here instead.
+   */
+  const saveAndGo = async (to: string, { requireAnswer = false } = {}) => {
     if (crisis || anyCrisis) return toHelp();
-    if (q < 5) return setQ(q + 1);
-    // Save: ask the server once more so what's saved matches the latest answers, never a stale preview.
+    const current = useDraft.getState().draft;
+    if (!current.opening.trim()) return requireAnswer ? setMissing(true) : navigate(to);
+    // Nothing changed since it was saved: don't save a second copy.
+    if (unchanged) { reset(); return navigate(to); }
     setSaving(true);
     setSaveError(null);
-    const current = useDraft.getState().draft;
     const { overrides, ...engineInput } = current;
-    const out = await requestPrepSummary(engineInput as StoryDraft);
+    let out = await requestPrepSummary(engineInput as StoryDraft);
+    if (out.status === 'unavailable') {
+      const local = translateStoryGuarded(engineInput as StoryDraft);
+      out = local.status === 'blocked' ? { status: 'blocked', message: local.message } : local;
+    }
     setSaving(false);
     if (out.status === 'crisis') return toHelp();
-    if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(`/visits/${visit.id}/before/summary`);
+    if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(to);
     if (out.status === 'blocked') return setSaveError(out.message);
-    if (out.status !== 'ok') return setSaveError(out.status === 'rejected' ? out.error.message : out.message);
+    if (out.status === 'rejected') return setSaveError(out.error.message);
     saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides) });
     reset();
-    navigate(`/visits/${visit.id}/before/summary`);
+    navigate(to);
   };
-  // Skip runs the same crisis check as Next, so typed crisis text can never ride into the summary or brief.
-  const skip = () => {
-    if (crisis || anyCrisis) return toHelp();
-    if (q < 5) return setQ(q + 1);
-    void next();
-  };
+  const next = () => saveAndGo(`/visits/${visit.id}/before/summary`, { requireAnswer: true });
 
   return (
-    <VisitLayout visit={visit} stage="before" step="">
+    <VisitLayout visit={visit} stage="before" step="" onStepNavigate={(to) => void saveAndGo(to)}>
       <div className="b1-grid">
         <section className="panel">
-          <span className="eyebrow-soft">You say · question {q} of 5</span>
-          <h1 className="panel-title">{QUESTIONS[q - 1]}</h1>
-          {q === 1 && (
-            <>
-              <ChipSelect label="When it started" options={ONSET_CHOICES} value={draft.onset.choice} onChange={(choice) => update({ onset: { ...draft.onset, choice } })} />
-              <Checkbox checked={!!draft.onset.afterMedChange} onChange={(afterMedChange) => update({ onset: { ...draft.onset, afterMedChange } })}>
-                It started after a medication change
-              </Checkbox>
-            </>
-          )}
-          {q === 2 && <ChipSelect label="How often" options={FREQUENCY_CHOICES} value={draft.frequency.choice} onChange={(choice) => update({ frequency: { ...draft.frequency, choice } })} />}
-          {q === 3 && (
-            <>
-              <div className="scale scale--11" role="group" aria-label="On most days, 0 to 10">
-                {Array.from({ length: 11 }, (_, n) => (
-                  <button key={n} type="button" aria-pressed={draft.severity.score === n}
-                    onClick={() => update({ severity: { ...draft.severity, score: draft.severity.score === n ? undefined : n } })}>{n}</button>
-                ))}
-              </div>
-              <div className="row row--between small muted"><span>Not at all</span><span>Worst</span></div>
-              <ChipMulti label="Affects" options={IMPACT_CHOICES} value={draft.severity.impacts} onChange={(impacts) => update({ severity: { ...draft.severity, impacts } })} />
-            </>
-          )}
-          {q === 4 && <ChipMulti label="Triggers" options={TRIGGER_CHOICES} value={draft.triggers.choices} onChange={(choices) => update({ triggers: { ...draft.triggers, choices } })} />}
-          {q === 5 && (
-            <>
-              <ChipMulti label="Tried" options={TRIED_CHOICES} value={draft.tried.choices} onChange={(choices) => update({ tried: { ...draft.tried, choices } })} />
-              {draft.tried.choices.includes('Medication') && (
-                <div className="grid-3">
-                  <div className="field"><label htmlFor="med">Medication</label>
-                    <input id="med" className="input" value={draft.tried.medName} onChange={(e) => update({ tried: { ...draft.tried, medName: e.target.value } })} /></div>
-                  <div className="field"><label htmlFor="dose">Dose</label>
-                    <input id="dose" className="input" placeholder="e.g. 50 mg" value={draft.tried.medDose} onChange={(e) => update({ tried: { ...draft.tried, medDose: e.target.value } })} /></div>
-                  <div className="field"><label htmlFor="dur">How long</label>
-                    <input id="dur" className="input" placeholder="e.g. 3 months" value={draft.tried.medDuration} onChange={(e) => update({ tried: { ...draft.tried, medDuration: e.target.value } })} /></div>
-                </div>
-              )}
-            </>
-          )}
-
+          <span className="eyebrow-soft">You say</span>
+          <h1 className="panel-title">{QUESTION}</h1>
+          <p className="b1-hint">{HINT}</p>
           {/* Always shown, on every browser and device. Where speech input isn't available yet,
               the button just moves the cursor to the text box. */}
           <div className="talk-row">
             {supported
-              ? <button {...buttonProps}>{listening ? 'Listening' : 'Talk'}</button>
-              : <button type="button" className="talk" onClick={() => document.getElementById('say')?.focus()}>Talk</button>}
-            <span className="muted">{listening ? 'Release to stop' : 'Hold to talk, or type'}</span>
+              ? <button {...toggleProps} className={`talk talk--record${listening ? ' listening' : ''}`}>{listening ? 'Stop' : 'Record'}</button>
+              : <button type="button" className="talk talk--record" onClick={() => document.getElementById('say')?.focus()}>Record</button>}
+            <span className="muted">
+              {listening ? 'Listening… press Stop when you’re done' : <>Press to talk/stop, or type below <span className="req" aria-hidden="true">*</span></>}
+            </span>
           </div>
-          <label htmlFor="say" className="sr-only">Your words</label>
-          <textarea id="say" className="textarea" value={text} onChange={(e) => update(withText(draft, q, e.target.value))}
-            placeholder={['Most days I…', 'It happens…', 'I’ve stopped being able to…', 'It’s worse when…', 'I tried…'][q - 1]} />
+          <label htmlFor="say" className="sr-only">Your words (required)</label>
+          <textarea id="say" className="textarea" aria-required="true" aria-invalid={missing} aria-describedby={missing ? 'say-missing' : undefined} value={text} onChange={(e) => { update({ opening: e.target.value }); if (missing) setMissing(false); }}
+            placeholder="Most days I…" />
 
           {crisis && (
             <div className="pcard pcard--crisis" role="alert" style={{ padding: 16 }}>
@@ -180,24 +141,17 @@ export function NameHowIFeel() {
             </div>
           )}
 
-          <div className="ob-actions">
-            {q > 1 && <button className="btn btn--outline" onClick={() => setQ(q - 1)}>Back</button>}
-            <button className="link-btn" onClick={skip}>Skip, I’m not sure</button>
-            <span className="spacer" />
-            <button className="btn btn--primary" onClick={() => void next()} disabled={saving} aria-busy={saving}>
-              {q < 5 ? 'Next question' : saving ? 'Saving…' : 'Looks right, save'}
-            </button>
-          </div>
+          {missing && <p id="say-missing" className="form-error" role="alert">Type or record an answer to continue.</p>}
           {saveError && <p className="note" role="alert">{saveError}</p>}
-          {latest && q === 1 && !draft.opening && (
+          {latest && !draft.opening && (
             <p className="small muted">Your last story was saved {formatDate(toISODate(new Date(latest.createdAt)))}. Telling it again adds an update.</p>
           )}
         </section>
 
         <section className="panel panel--accent" aria-labelledby="reads">
           <span id="reads" className="eyebrow-soft">Your doctor reads · updates as you go</span>
-          {preview.status === 'loading' && <p className="note" role="status">Updating…</p>}
-          {(preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
+          {!showSaved && preview.status === 'loading' && <p className="note" role="status">Updating…</p>}
+          {!showSaved && (preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
           <div className="kv">
             {fields.map((f) => (
               <div key={f.key} className="kv__row">
@@ -222,6 +176,13 @@ export function NameHowIFeel() {
           </div>
           <p className="note">Your words stay attached to every line. Tap Edit to change anything.</p>
         </section>
+      </div>
+      <div className="b1-footer">
+        <span className="small"><span className="req" aria-hidden="true">*</span> required</span>
+        <span className="spacer" />
+        <button className="btn btn--primary" onClick={() => void next()} disabled={saving} aria-busy={saving}>
+          {saving ? 'Saving…' : 'Continue'}
+        </button>
       </div>
     </VisitLayout>
   );
@@ -356,20 +317,36 @@ export function DoctorSummaryStep() {
   const visit = useVisitParam();
   const navigate = useNavigate();
   const state = useApp();
-  const latest = selectLatestSummary(state);
   const [editing, setEditing] = useState(false);
   const [vals, setVals] = useState<Record<string, string>>({});
   if (!visit) return <Navigate to="/visits" replace />;
   const base = `/visits/${visit.id}/before`;
+  // Only what was shared in Name how I feel for this visit.
+  const latest = selectVisitSummary(state, visit);
 
+  // Empty state: nothing shared in Name how I feel for this visit yet.
   if (!latest) {
     return (
       <VisitLayout visit={visit} stage="before" step="summary">
-        <section className="panel panel--accent">
-          <h1 className="panel-title">Your doctor summary</h1>
-          <p className="muted">It builds itself from your words. Start with step 1 — rough is fine.</p>
-          <Link to={base} className="btn btn--primary" style={{ alignSelf: 'flex-start' }}>Name how I feel</Link>
+        <section className="panel panel--accent b3-panel" aria-labelledby="b3-title">
+          <h1 id="b3-title" className="panel-title">Notes for your doctor</h1>
+          <p className="muted" style={{ margin: 0 }}>Nothing here yet. These notes fill in from what you share in Name how I feel.</p>
+          <div className="two-col two-col--plain">
+            <div className="kv">
+              <span className="eyebrow-soft">Symptoms</span>
+              <span className="muted">[—]</span>
+            </div>
+            <div className="stack">
+              <div className="kv"><span className="eyebrow-soft">Treatment so far</span><span className="muted">[—]</span></div>
+              <div className="kv"><span className="eyebrow-soft">What others have noticed</span><span className="muted">[—]</span></div>
+            </div>
+          </div>
         </section>
+        <div className="b1-footer">
+          <span className="spacer" />
+          <Link to={base} className="btn btn--outline">Go to Name how I feel</Link>
+          <Link to={`${base}/brief`} className="btn btn--primary">Continue</Link>
+        </div>
       </VisitLayout>
     );
   }
@@ -381,10 +358,14 @@ export function DoctorSummaryStep() {
   };
   const updated = toISODate(new Date(latest.createdAt));
   const tried = show('tried');
-  const meds = state.medications.map((m) => `${m.name}${m.dose ? ` ${m.dose}` : ''} since ${formatShort(m.started)}${m.note ? ` · ${m.note}` : ''}`);
+
+  const noticed = visit.othersNoticed?.trim();
 
   const startEdit = () => {
-    setVals(Object.fromEntries(latest.fields.map((f) => [f.key, f.clinical === 'Not discussed' ? '' : f.clinical])));
+    setVals({
+      ...Object.fromEntries(latest.fields.map((f) => [f.key, f.clinical === 'Not discussed' ? '' : f.clinical])),
+      noticed: visit.othersNoticed ?? '',
+    });
     setEditing(true);
   };
   const saveEdit = () => {
@@ -394,15 +375,17 @@ export function DoctorSummaryStep() {
       const before = f.clinical === 'Not discussed' ? '' : f.clinical;
       return v === before ? f : { ...f, clinical: v || 'Not discussed', editedByPatient: true };
     });
-    state.saveSummary({ opening: latest.opening, fields });
+    if (fields.some((f, i) => f !== latest.fields[i])) state.saveSummary({ opening: latest.opening, fields });
+    const n = vals.noticed?.trim() ?? '';
+    if (n !== (visit.othersNoticed ?? '')) state.updateVisit(visit.id, { othersNoticed: n || undefined });
     setEditing(false);
   };
 
   return (
     <VisitLayout visit={visit} stage="before" step="summary">
-      <section className="panel panel--accent">
+      <section className="panel panel--accent b3-panel" aria-labelledby="b3-title">
         <div className="row row--between row--wrap">
-          <h1 className="panel-title">Summary for {visit.clinician || 'your doctor'}</h1>
+          <h1 id="b3-title" className="panel-title">Notes for your doctor</h1>
           <span className="tag">{updated === todayISO() ? 'Updated today' : `Updated ${formatShort(updated)}`}</span>
         </div>
         {editing ? (
@@ -414,57 +397,69 @@ export function DoctorSummaryStep() {
                   onChange={(e) => setVals({ ...vals, [r.key]: e.target.value })} />
               </div>
             ))}
+            <div className="field">
+              <label htmlFor="sum-noticed">What others have noticed</label>
+              <textarea id="sum-noticed" className="textarea" style={{ minHeight: 56 }} value={vals.noticed ?? ''}
+                placeholder="e.g. My partner says I’ve been sleeping more."
+                onChange={(e) => setVals({ ...vals, noticed: e.target.value })} />
+            </div>
           </div>
         ) : (
           <div className="two-col two-col--plain">
             <div className="kv">
               <span className="eyebrow-soft">Symptoms</span>
+              {latest.opening && (
+                <div className="kv__row"><span><strong>In your words:</strong> “{latest.opening}”</span></div>
+              )}
               {SUMMARY_ROWS.map((r) => show(r.key) && (
                 <div className="kv__row" key={r.key}>
                   <span><strong>{r.label}:</strong> {show(r.key)}</span>
                   {field(r.key)?.editedByPatient && <span className="small muted">Your wording</span>}
                 </div>
               ))}
+              {!latest.opening && !SUMMARY_ROWS.some((r) => show(r.key)) && <span className="muted">Not discussed</span>}
             </div>
-            <div className="kv">
-              <span className="eyebrow-soft">Treatment so far</span>
-              {tried && <span>{tried}</span>}
-              {meds.map((m) => <span key={m}><strong>{m}</strong></span>)}
-              {!tried && !meds.length && <span className="muted">Not discussed</span>}
+            <div className="stack">
+              <div className="kv">
+                <span className="eyebrow-soft">Treatment so far</span>
+                {tried ? <span>{tried}</span> : <span className="muted">Not discussed</span>}
+              </div>
+              <div className="kv">
+                <span className="eyebrow-soft">What others have noticed</span>
+                {noticed ? <span>{noticed}</span> : <span className="muted">Nothing added yet. Tap Edit to add it.</span>}
+              </div>
             </div>
           </div>
         )}
-        <p className="note">Built from your words and imported notes. Patient-reported.</p>
-        <Disclaimer />
-        <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
-          {editing ? (
-            <>
-              <button className="btn btn--outline" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="btn btn--primary" onClick={saveEdit}>Save changes</button>
-            </>
-          ) : (
-            <>
-              <button className="btn btn--outline" onClick={startEdit}>Edit</button>
-              <Link to={`${base}/brief`} className="btn btn--primary">Next: Talking points</Link>
-            </>
-          )}
-        </div>
+        <p className="note">Built from your words in Name how I feel. Patient-reported.</p>
       </section>
+      <div className="b1-footer">
+        <span className="spacer" />
+        {editing ? (
+          <>
+            <button className="btn btn--outline" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn btn--primary" onClick={saveEdit}>Save changes</button>
+          </>
+        ) : (
+          <>
+            <button className="btn btn--outline" onClick={startEdit}>Edit</button>
+            <Link to={`${base}/brief`} className="btn btn--primary">Continue</Link>
+          </>
+        )}
+      </div>
     </VisitLayout>
   );
 }
 
 /* ======================================================================
-   B4 · Talking points (top 3) + playbooks to bring
+   B4 · Talking points + tips to bring
    ====================================================================== */
-
-const ASKING = ['Medication review', 'Referral', 'Test or lab work', 'Therapist referral', 'Follow-up plan', 'Second opinion'];
 
 export function TalkingPointsStep() {
   const visit = useVisitParam();
   const state = useApp();
-  const latest = selectLatestSummary(state);
   if (!visit) return <Navigate to="/visits" replace />;
+  const latest = selectVisitSummary(state, visit);
   const update = (patch: Partial<Visit>) => state.updateVisit(visit.id, patch);
   const attached = visit.scripts ?? [];
   const suggested = [...new Set([...attached, ...draftPlaybook(state).scriptIds, ...state.savedScripts])].slice(0, 6);
@@ -472,9 +467,9 @@ export function TalkingPointsStep() {
   return (
     <VisitLayout visit={visit} stage="before" step="brief">
       <div className="b4-grid">
-        <section className="panel">
-          <div className="row row--between row--wrap">
-            <h1 className="panel-title">Your talking points</h1>
+        <section className="panel" aria-labelledby="b4-title">
+          <div className="row row--between b4-head">
+            <h1 id="b4-title" className="panel-title">Your appointment talking points</h1>
             {visit.priorities.length > 0 && <span className="pill pill--amber">Ready for your visit</span>}
           </div>
           <p className="muted" style={{ margin: 0 }}>Your visit goes fast. Drag to put what matters most first.</p>
@@ -487,33 +482,34 @@ export function TalkingPointsStep() {
               ...suggestionsFrom(latest?.fields.find((f) => f.key === 'symptoms')?.clinical),
             ]}
             bare
+            addLink
           />
-          <div className="stack-sm">
-            <span className="eyebrow-soft">What I’m asking for</span>
-            <ChipMulti label="What I'm asking for" options={[...new Set([...ASKING, ...visit.askingFor])]} value={visit.askingFor} onChange={(askingFor) => update({ askingFor })} />
+        </section>
+        <div className="b4-side">
+          <section className="panel" aria-labelledby="b4-helped">
+            <span id="b4-helped" className="eyebrow-soft">What helped others</span>
+            <ul className="found">
+              {suggested.map((id) => {
+                const s = SCRIPTS.find((x) => x.id === id);
+                if (!s) return null;
+                const on = attached.includes(id);
+                return (
+                  <li key={id}>
+                    <span style={{ flex: 1 }}>{s.situation}</span>
+                    <button className={on ? 'tag tag--btn' : 'link-btn'} aria-pressed={on}
+                      onClick={() => update({ scripts: on ? attached.filter((x) => x !== id) : [...attached, id] })}>
+                      {on ? 'Added' : 'Add'}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+          <div className="b1-footer" style={{ marginTop: 0 }}>
+            <span className="spacer" />
+            <Link to={`/visits/${visit.id}/before/today`} className="btn btn--primary">Continue</Link>
           </div>
-        </section>
-        <section className="panel">
-          <span className="eyebrow-soft">Playbooks to bring</span>
-          <ul className="found">
-            {suggested.map((id) => {
-              const s = SCRIPTS.find((x) => x.id === id);
-              if (!s) return null;
-              const on = attached.includes(id);
-              return (
-                <li key={id}>
-                  <span style={{ flex: 1 }}>{s.situation}</span>
-                  <button className={on ? 'tag tag--btn' : 'link-btn'} aria-pressed={on}
-                    onClick={() => update({ scripts: on ? attached.filter((x) => x !== id) : [...attached, id] })}>
-                    {on ? 'Added' : 'Add'}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <Link to="/playbooks/others" className="link-btn" style={{ alignSelf: 'flex-start' }}>Browse more playbooks</Link>
-          <Link to={`/visits/${visit.id}/before/today`} className="btn btn--primary btn--block" style={{ marginTop: 'auto' }}>Next: Prep</Link>
-        </section>
+        </div>
       </div>
     </VisitLayout>
   );
@@ -523,15 +519,15 @@ export function TalkingPointsStep() {
    B5 · Prep — feeling, editable checklist, breathing
    ====================================================================== */
 
-/** Shown first: the most common pre-visit feelings. */
-const FEELINGS = ['Calm', 'Hopeful', 'Nervous', 'Anxious', 'Overwhelmed', 'Tired', 'Frustrated', 'Scared'];
-/** Behind "More feelings", in plain everyday words. */
-const MORE_FEELINGS: { group: string; options: string[] }[] = [
-  { group: 'Uneasy', options: ['Restless', 'On edge', 'Worried', 'Dreading it'] },
-  { group: 'Low', options: ['Sad', 'Numb', 'Flat', 'Hopeless'] },
-  { group: 'Steady', options: ['Ready', 'Relieved', 'Determined', 'Okay'] },
-];
-const DEFAULT_CHECKS = ['Read my top 3 talking points', 'Pick one playbook to keep handy', 'Bring ID, med list, phone charged'];
+/** How are you feeling right now? Pick any that fit. */
+const FEELINGS = ['Calm', 'Nervous', 'Overwhelmed', 'Hopeful', 'Frustrated', 'Scared', 'Normal'];
+const DEFAULT_CHECKS = ['Read my appointment talking points', 'Pick one tip to keep handy', 'Bring ID, med list, charged phone'];
+/** Earlier names of the default items, so ticks saved before the rename still count. */
+const OLD_CHECK_NAMES: Record<string, string[]> = {
+  'Read my appointment talking points': ['Read my talking points', 'Read my top 3 talking points'],
+  'Pick one tip to keep handy': ['Pick one playbook to keep handy'],
+  'Bring ID, med list, charged phone': ['Bring ID, med list, phone charged'],
+};
 
 export function PrepStep() {
   const visit = useVisitParam();
@@ -539,8 +535,8 @@ export function PrepStep() {
   const updateVisit = useApp((s) => s.updateVisit);
   const [adding, setAdding] = useState(false);
   const [newItem, setNewItem] = useState('');
-  // Open "More feelings" when a saved feeling lives there, so the selection is visible.
-  const [moreOpen, setMoreOpen] = useState(() => prepFeelings(visit?.prep).some((f) => !FEELINGS.includes(f)));
+  const [addingFeeling, setAddingFeeling] = useState(false);
+  const [newFeelings, setNewFeelings] = useState('');
   if (!visit) return <Navigate to="/visits" replace />;
   const prep = visit.prep ?? { checks: [], extra: [] };
   const feelings = prepFeelings(prep);
@@ -548,7 +544,33 @@ export function PrepStep() {
   const setFeelings = (next: string[]) => set({ feelings: next, feeling: undefined });
   const set = (patch: Partial<typeof prep>) => updateVisit(visit.id, { prep: { ...prep, ...patch } });
   const items = [...DEFAULT_CHECKS, ...prep.extra];
+  const names = (item: string) => [item, ...(OLD_CHECK_NAMES[item] ?? [])];
+  const isChecked = (item: string) => names(item).some((n) => prep.checks.includes(n));
+  const toggle = (item: string, on: boolean) => {
+    const rest = prep.checks.filter((c) => !names(item).includes(c));
+    set({ checks: on ? [...rest, item] : rest });
+  };
+  // Feelings saved before this list changed stay visible, so they can be unpicked.
+  const feelingOptions = [...new Set([...FEELINGS, ...feelings])];
   const when = visit.date === todayISO() ? `Today${visit.time ? `, ${formatTime(visit.time)}` : ''}` : visit.time ? formatTime(visit.time) : undefined;
+
+  /** "Tired, restless" adds two feelings. Duplicates (any case) are skipped. */
+  const addFeelings = () => {
+    const typed = newFeelings.split(',').map((f) => f.trim().replace(/\s+/g, ' ').slice(0, 40)).filter(Boolean)
+      .map((f) => f.charAt(0).toUpperCase() + f.slice(1));
+    if (!typed.length) return;
+    if (typed.some((f) => hasCrisisLanguage(f))) { navigate('/help/now'); return; }
+    const have = new Set(feelings.map((f) => f.toLowerCase()));
+    const fresh: string[] = [];
+    typed.forEach((f) => {
+      const match = FEELINGS.find((o) => o.toLowerCase() === f.toLowerCase()) ?? f;
+      if (!have.has(match.toLowerCase())) { have.add(match.toLowerCase()); fresh.push(match); }
+    });
+    setFeelings([...feelings, ...fresh]);
+    setNewFeelings('');
+    setAddingFeeling(false);
+  };
+  const closeFeelings = () => { setNewFeelings(''); setAddingFeeling(false); };
 
   const add = () => {
     const t = newItem.trim();
@@ -562,32 +584,33 @@ export function PrepStep() {
   return (
     <VisitLayout visit={visit} stage="before" step="today" crumbExtra={when}>
       <h1>You’ve already done the hard part.</h1>
-      <p className="muted" style={{ marginTop: -6 }}>Three small things before you go. Skip any.</p>
+      <p className="muted" style={{ marginTop: -6 }}>Feel free to check in with yourself, or skip these questions.</p>
       <section className="panel">
         <span className="eyebrow-soft">How are you feeling right now?</span>
-        <span className="small muted" style={{ marginTop: -4 }}>Pick any that fit.</span>
-        <ChipMulti label="How are you feeling" options={FEELINGS} value={feelings} onChange={setFeelings} />
-        <button type="button" className="link-btn feelings-more-btn" aria-expanded={moreOpen} aria-controls="more-feelings" onClick={() => setMoreOpen((o) => !o)}>
-          {moreOpen ? 'Fewer feelings' : 'More feelings'} <span aria-hidden="true">{moreOpen ? '▴' : '▾'}</span>
-        </button>
-        {moreOpen && (
-          <div id="more-feelings" className="feelings-more">
-            {MORE_FEELINGS.map(({ group, options }) => (
-              <div key={group} className="feelings-more__group">
-                <span className="small muted">{group}</span>
-                <ChipMulti label={`${group} feelings`} options={options} value={feelings} onChange={setFeelings} />
-              </div>
-            ))}
-          </div>
+        <ChipMulti label="How are you feeling" options={feelingOptions} value={feelings} onChange={setFeelings} />
+        {addingFeeling ? (
+          <form className="stack-sm" onSubmit={(e) => { e.preventDefault(); addFeelings(); }}>
+            <label htmlFor="own-feeling" className="sr-only">Add your own feelings</label>
+            <div className="row">
+              <input id="own-feeling" className="input" autoFocus value={newFeelings} aria-describedby="own-feeling-hint"
+                placeholder="e.g. Tired, restless, relieved" onChange={(e) => setNewFeelings(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') closeFeelings(); }} />
+              <button className="btn btn--sm" type="submit" disabled={!newFeelings.trim()}>Add</button>
+              <button type="button" className="link-btn" onClick={closeFeelings}>Cancel</button>
+            </div>
+            <span id="own-feeling-hint" className="small muted">You can add more than one. Separate them with commas.</span>
+          </form>
+        ) : (
+          <button type="button" className="link-btn priority-add" onClick={() => setAddingFeeling(true)}>+ Add your own</button>
         )}
       </section>
       <div className="b5-grid">
         <section className="panel">
-          <span className="eyebrow-soft">Checklist</span>
+          <span className="eyebrow-soft">Before you go checklist</span>
           <div className="checklist">
             {items.map((item) => (
               <div key={item} className="checklist__row">
-                <Checkbox checked={prep.checks.includes(item)} onChange={(on) => set({ checks: on ? [...prep.checks, item] : prep.checks.filter((c) => c !== item) })}>{item}</Checkbox>
+                <Checkbox checked={isChecked(item)} onChange={(on) => toggle(item, on)}>{item}</Checkbox>
                 {prep.extra.includes(item) && (
                   <button className="icon-btn" aria-label={`Remove "${item}"`} onClick={() => set({ extra: prep.extra.filter((x) => x !== item), checks: prep.checks.filter((c) => c !== item) })}>×</button>
                 )}
@@ -597,17 +620,20 @@ export function PrepStep() {
           {adding ? (
             <form className="row" onSubmit={(e) => { e.preventDefault(); add(); }}>
               <label htmlFor="own" className="sr-only">Add your own</label>
-              <input id="own" className="input" autoFocus value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="e.g. Write down my questions" />
+              <input id="own" className="input" autoFocus value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="e.g. Write down my questions"
+                onKeyDown={(e) => { if (e.key === 'Escape') { setNewItem(''); setAdding(false); } }} />
               <button className="btn btn--sm" type="submit" disabled={!newItem.trim()}>Add</button>
+              <button type="button" className="link-btn" onClick={() => { setNewItem(''); setAdding(false); }}>Cancel</button>
             </form>
           ) : (
-            <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(true)}>+ Add your own</button>
+            <button className="link-btn priority-add" onClick={() => setAdding(true)}>+ Add your own</button>
           )}
         </section>
         <BreathingPanel />
       </div>
-      <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
-        <Link to={`/visits/${visit.id}/before/share`} className="btn btn--primary">Next: Share</Link>
+      <div className="b1-footer">
+        <span className="spacer" />
+        <Link to={`/visits/${visit.id}/before/share`} className="btn btn--primary">Continue</Link>
       </div>
     </VisitLayout>
   );
@@ -633,16 +659,16 @@ function BreathingPanel() {
 
   return (
     <section className="panel panel--muted breath-panel" aria-label="Optional breathing">
-      <span className="eyebrow-soft">Optional · breathing</span>
+      <span className="eyebrow-soft">Prep · breathing to help you feel calm before the visit</span>
       <p style={{ margin: 0 }}>Follow the circle — breathe in, hold, out.</p>
       <div className="breath-ring" aria-live="polite" style={{ transform: `scale(${scale})`, transitionDuration: phase === 'in' ? '4s' : phase === 'out' ? '6s' : '0.3s' }}>
         {phase === 'idle' ? 'Breathe in' : phase === 'done' ? 'Done' : phase === 'in' ? 'Breathe in' : phase === 'hold' ? 'Hold' : 'Breathe out'}
       </div>
-      <span className="small muted">{running && !done ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left` : 'In 4 · hold · out 6'}</span>
+      <span className="small muted">{running && !done ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left` : 'Inhale 4 · Hold · Exhale 6'}</span>
       <div className="chips" role="group" aria-label="How long">
         {[1, 3, 5].map((m) => <Chip key={m} selected={minutes === m} onClick={() => { setMinutes(m); setRunning(false); setElapsed(0); }}>{m} min</Chip>)}
       </div>
-      <button className="btn btn--outline" onClick={() => { if (running && !done) { setRunning(false); } else { setElapsed(0); setRunning(true); } }}>
+      <button className="btn btn--outline btn--sm breath-start" onClick={() => { if (running && !done) { setRunning(false); } else { setElapsed(0); setRunning(true); } }}>
         {running && !done ? 'Stop' : done ? 'Again' : 'Start'}
       </button>
     </section>
@@ -653,10 +679,11 @@ function BreathingPanel() {
    B6 · Export PDF / share link (dialog)
    ====================================================================== */
 
+/** Counted from the visit date. */
 const EXPIRY = [
-  { label: 'In 24 hours', days: 1 },
-  { label: 'In 7 days', days: 7 },
-  { label: 'In 30 days', days: 30 },
+  { label: '30 days', days: 30 },
+  { label: '60 days', days: 60 },
+  { label: '90 days', days: 90 },
 ];
 
 export function ShareStep() {
@@ -666,22 +693,42 @@ export function ShareStep() {
   const [open, setOpen] = useState(true);
   const [tp, setTp] = useState(true);
   const [sum, setSum] = useState(true);
-  const [hist, setHist] = useState(false);
-  const [days, setDays] = useState(7);
-  const [made, setMade] = useState<string | null>(null);
+  const [days, setDays] = useState(30);
+  const [made, setMade] = useState<ShareLink | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [emails, setEmails] = useState('');
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
   const active = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
 
   const create = async () => {
-    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum, caseHistory: hist }), days);
+    // The countdown starts on the visit date (or today, if the visit has passed).
+    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum, caseHistory: false }), days, parseISO(visit.date));
     state.updateVisit(visit.id, { shared: true });
-    setMade(linkUrl(l));
-    try { await navigator.clipboard.writeText(linkUrl(l)); showToast('Link made and copied'); } catch { showToast('Link made'); }
+    setMade(l);
+    setCopied(false);
+    setEmails('');
+    setEmailMsg(null);
   };
+  const copy = async (l: ShareLink) => {
+    try { await navigator.clipboard.writeText(linkUrl(l)); setCopied(true); } catch { setCopied(false); showToast('Couldn’t copy. Select the link and copy it.'); }
+  };
+  /** Opens the person's own email app with the link filled in. Nothing is sent by us. */
+  const sendEmail = () => {
+    if (!made) return;
+    const list = emails.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean);
+    if (!list.length) return setEmailMsg({ ok: false, text: 'Enter at least one email address.' });
+    const bad = list.filter((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (bad.length) return setEmailMsg({ ok: false, text: `Check ${bad.length === 1 ? 'this address' : 'these addresses'}: ${bad.join(', ')}` });
+    const draft = shareEmailDraft({ recipient: { name: '', role: '', email: list.join(',') }, url: linkUrl(made), expiresAt: made.expiresAt, patientName: state.profile?.name });
+    window.location.href = draft.mailto;
+    setEmailMsg({ ok: true, text: 'Your email app should open with the message ready to send.' });
+  };
+  const close = () => { setOpen(false); setMade(null); setCopied(false); setEmails(''); setEmailMsg(null); };
   const pdf = () => {
     state.updateVisit(visit.id, { shared: true });
-    navigate(`/visits/${visit.id}/at/room?print=1&tp=${tp ? 1 : 0}&sum=${sum ? 1 : 0}&hist=${hist ? 1 : 0}`);
+    navigate(`/visits/${visit.id}/at/room?print=1&tp=${tp ? 1 : 0}&sum=${sum ? 1 : 0}&hist=0`);
   };
 
   return (
@@ -699,12 +746,42 @@ export function ShareStep() {
       </section>
 
       {open && (
-        <Modal title="Share your summary" onClose={() => setOpen(false)}>
+        <Modal title={made ? 'Your link is ready' : 'Share your summary'} onClose={close} closeButton>
+          {made ? (
+            <>
+              <p className="muted" style={{ margin: 0 }}>Anyone with the link can view your summary until it expires.</p>
+              <div className="row share-ready__row">
+                <label htmlFor="ready-link" className="sr-only">Your link</label>
+                <input id="ready-link" className="input" readOnly value={linkUrl(made)} onFocus={(e) => e.currentTarget.select()} />
+                <button className="btn btn--primary" onClick={() => void copy(made)}>Copy link</button>
+              </div>
+              {copied && (
+                <p className="share-ready__copied" role="status">
+                  <span aria-hidden="true">✓</span> Link copied. Paste it in a text, patient portal message or email.
+                </p>
+              )}
+              <h3 className="share-ready__heading">Or send it by email</h3>
+              <div className="row share-ready__row">
+                <label htmlFor="ready-emails" className="sr-only">Email addresses, separated by commas</label>
+                <input id="ready-emails" className="input" type="text" inputMode="email" autoComplete="off" value={emails}
+                  placeholder="doctor@clinic.com, me@email.com" onChange={(e) => { setEmails(e.target.value); setEmailMsg(null); }}
+                  aria-invalid={emailMsg ? !emailMsg.ok : undefined} aria-describedby={emailMsg ? 'ready-email-msg' : undefined} />
+                <button className="btn btn--outline" onClick={sendEmail}>Send email</button>
+              </div>
+              {emailMsg && <p id="ready-email-msg" className={emailMsg.ok ? 'small muted' : 'form-error'} role={emailMsg.ok ? 'status' : 'alert'} style={{ margin: 0 }}>{emailMsg.text}</p>}
+              <p className="small muted" style={{ margin: 0 }}>
+                Anyone with the link can view it until it expires. You can stop sharing anytime in <Link to="/settings/privacy">Settings</Link>.
+              </p>
+              <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
+                <button className="btn btn--primary" onClick={close}>Done</button>
+              </div>
+            </>
+          ) : (
+          <>
           <span className="eyebrow-soft">Include</span>
           <div className="checklist">
-            <div className="checklist__row"><Checkbox checked={tp} onChange={setTp}>Talking points</Checkbox></div>
-            <div className="checklist__row"><Checkbox checked={sum} onChange={setSum}>Doctor summary</Checkbox></div>
-            <div className="checklist__row"><Checkbox checked={hist} onChange={setHist}>Case history (patterns, key dates, past visits)</Checkbox></div>
+            <div className="checklist__row"><Checkbox checked={tp} onChange={setTp}>Appointment talking points</Checkbox></div>
+            <div className="checklist__row"><Checkbox checked={sum} onChange={setSum}>Notes for your doctor</Checkbox></div>
           </div>
           <div className="grid-2">
             <button className="btn btn--primary" disabled={!tp && !sum} onClick={create}>Create link</button>
@@ -715,19 +792,17 @@ export function ShareStep() {
             <select id="exp" className="select input" value={days} onChange={(e) => setDays(Number(e.target.value))}>
               {EXPIRY.map((e) => <option key={e.days} value={e.days}>{e.label}</option>)}
             </select>
+            <span className="small muted">
+              {visit.date > todayISO() ? `Counts from your visit date (${formatShort(visit.date)}).` : 'Counts from today.'}{' '}
+              The link ends {formatDate(addDays(visit.date > todayISO() ? visit.date : todayISO(), days))}.
+            </span>
           </div>
-          {made && (
-            <div className="quote small" role="status" style={{ wordBreak: 'break-all' }}>
-              Your link: <a href={made}>{made}</a>
-            </div>
-          )}
           <p className="small muted" style={{ margin: 0 }}>
             Anyone with the link can view it until it expires. You can stop sharing anytime in <Link to="/settings/privacy">Settings</Link>.
             For now links open only on this device, because nothing is uploaded yet.
           </p>
-          <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
-            <button className="link-btn" onClick={() => setOpen(false)}>Done</button>
-          </div>
+          </>
+          )}
         </Modal>
       )}
       {toast}

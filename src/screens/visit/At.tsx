@@ -81,9 +81,9 @@ export function AtVisit() {
           </div>
 
           <section className="panel panel--accent">
-            <span className="eyebrow-soft">Your talking points · tick as you cover them</span>
+            <span className="eyebrow-soft">Your appointment talking points · tick as you cover them</span>
             {visit.priorities.length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No talking points yet. <Link to={`/visits/${visit.id}/before/brief`}>Add your top 3</Link>.</p>
+              <p className="muted" style={{ margin: 0 }}>No talking points yet. <Link to={`/visits/${visit.id}/before/brief`}>Add your talking points</Link>.</p>
             ) : (
               <div className="checklist">
                 {visit.priorities.map((p) => (
@@ -106,7 +106,7 @@ export function AtVisit() {
             <label htmlFor="qn" className="eyebrow-soft">Quick notes</label>
             <textarea id="qn" className="textarea" style={{ minHeight: 90 }} value={visit.notes ?? ''}
               onChange={(e) => updateVisit(visit.id, { notes: e.target.value })}
-              placeholder="Jot what the doctor says — it feeds your recap." />
+              placeholder="Jot what the doctor says — it feeds your visit summary." />
             {notesCrisis && (
               <div className="pcard pcard--crisis" role="alert" style={{ padding: 14 }}>
                 <span className="small"><strong>If you need support right now,</strong> you can call or text 988 any time.</span>
@@ -115,7 +115,7 @@ export function AtVisit() {
             )}
           </section>
 
-          {/* Be-believed cues (ADR-022): what was heard, and the matching playbook line to say. Newest first. */}
+          {/* Be-believed cues (ADR-022): what was heard, and the matching tip line to say. Newest first. */}
           {heard.cues.map((c) => (
             <section key={c.id} className="panel panel--muted" aria-live="polite">
               <span className="eyebrow-soft">Heard: “{c.heard}”</span>
@@ -128,39 +128,39 @@ export function AtVisit() {
           {nextUp && (
             <section className="panel panel--muted" aria-live="polite">
               <span className="eyebrow-soft">Quiet tip</span>
-              <p style={{ margin: 0 }}>You haven’t covered “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
+              <p style={{ margin: 0 }}>You haven’t asked about “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
             </section>
           )}
           {/* Demo only (ADR-015): play Theo's sample visit as if it had been recorded, then see the After step fill in. */}
           {demoMode && <PlayTheosVisit visitId={visit.id} />}
-          <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline">Visit’s over — go to recap</Link>
+          <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline">Visit’s over — go to visit summary</Link>
         </div>
 
         <aside className="panel playbook-now" aria-labelledby="pb-now">
-          <span className="eyebrow-soft">Playbook · open now</span>
+          <span className="eyebrow-soft">What helped others · open now</span>
           <h2 id="pb-now" className="panel-title">{shown.situation}</h2>
           <div className="bubble">“{shown.text}”</div>
           <div className="bubble">“What would we try next if this doesn’t improve in [4] weeks?”</div>
           {scripts.length > 1 && (
             <div className="field">
-              <label htmlFor="pick" className="small muted">Switch playbook</label>
+              <label htmlFor="pick" className="small muted">Switch tip</label>
               <select id="pick" className="select input" value={shown.id} onChange={(e) => setScriptId(e.target.value)}>
                 {scripts.map((id) => { const s = SCRIPTS.find((x) => x.id === id); return s ? <option key={id} value={id}>{s.situation}</option> : null; })}
               </select>
             </div>
           )}
-          <Link to="/playbooks" className="link-btn" style={{ alignSelf: 'flex-start' }}>Other playbooks</Link>
+          <Link to="/playbooks" className="link-btn" style={{ alignSelf: 'flex-start' }}>Other tips</Link>
         </aside>
       </div>
 
       {!decided && (
-        <Modal title="Record this visit for your recap?" onClose={() => updateVisit(visit.id, { recording: 'declined' })}>
+        <Modal title="Record this visit for your visit summary?" onClose={() => updateVisit(visit.id, { recording: 'declined' })}>
           <p className="muted" style={{ margin: 0 }}>We’ll turn the conversation into a plain recap for you. Recording only starts when both of you agree.</p>
           <div className="checklist">
             <div className="checklist__row"><Checkbox checked={iAgree} onChange={setIAgree}><strong>I agree</strong> to record this visit</Checkbox></div>
             <div className="checklist__row"><Checkbox checked={docAgrees} onChange={setDocAgrees}><strong>My doctor agrees</strong> (ask them, then tick)</Checkbox></div>
           </div>
-          <p className="note">Ask: “Is it OK if I record this so I remember what we discuss?” You can stop anytime. No audio is kept — only the words, turned into your recap.</p>
+          <p className="note">Ask: “Is it OK if I record this so I remember what we discuss?” You can stop anytime. No audio is kept — only the words, turned into your visit summary.</p>
           <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
             <button className="link-btn" onClick={() => updateVisit(visit.id, { recording: 'declined' })}>Don’t record</button>
             <button className="btn btn--primary" disabled={!iAgree || !docAgrees} onClick={start}>Start recording</button>
@@ -228,7 +228,7 @@ function CaptureBar({ visitId, running, setRunning, onStop }: { visitId: string;
         <strong>{paused ? 'Paused' : 'Recording'}</strong> · {mm} · both agreed{live.count > 0 && ` · ${live.count} saved`}
         {/* Live words: shown as they're spoken, not read out by screen readers (they change constantly). */}
         {!paused && live.interim && <span className="small muted" aria-live="off" style={{ display: 'block', fontStyle: 'italic' }}>Hearing: “{live.interim}”</span>}
-        {!Ctor && <span className="small muted" style={{ display: 'block' }}>Live capture isn’t available in this browser. Your quick notes will feed the recap.</span>}
+        {!Ctor && <span className="small muted" style={{ display: 'block' }}>Live capture isn’t available in this browser. Your quick notes will feed your visit summary.</span>}
       </span>
       <button className="btn btn--outline btn--sm" onClick={() => setPaused(!paused)}>{paused ? 'Resume' : 'Pause'}</button>
       <button className="btn btn--danger btn--sm" onClick={stop}>Stop</button>

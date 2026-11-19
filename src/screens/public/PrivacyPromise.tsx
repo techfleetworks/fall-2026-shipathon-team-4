@@ -30,7 +30,7 @@ export function PrivacyPromise() {
             <Link to="/legal/privacy" className="text-link pcard-foot">Read the full privacy policy</Link>
           </div>
           <div className="pcard">
-            <h2>We only record if you both say yes</h2>
+            <h2>We only record if you and your doctor say yes</h2>
             <p>The app can record your visit to make a summary, but only if you and your doctor agree first. You can stop anytime.</p>
           </div>
           <div className="pcard">

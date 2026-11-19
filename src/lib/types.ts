@@ -79,7 +79,7 @@ export interface CheckIn {
   feltHeard: number; // 1-5
   /** F2: "Was a next step agreed?" */
   nextStepAgreed?: 'Yes' | 'Not clear' | 'No';
-  /** F2: "Did a playbook help?" */
+  /** F2: "Did a tip help?" */
   playbookHelped?: Answer3;
   /** Legacy (MVP check-in) */
   nextSteps?: NextStepKind[];
@@ -107,6 +107,8 @@ export interface FollowUp {
 export interface Visit {
   id: string;
   date: string; // YYYY-MM-DD
+  /** When the visit was added (ISO). Only stories saved after this count toward its Before steps. Missing on older visits. */
+  createdAt?: string;
   clinician?: string;
   /** V2: the doctor's email, for the patient's own reference (nothing is sent to it). */
   clinicianEmail?: string;
@@ -118,7 +120,9 @@ export interface Visit {
   time?: string;
   /** "What's this visit for?" */
   reason?: string;
-  /** Talking points (top 3 priorities). */
+  /** Notes for your doctor: what family, friends or coworkers have noticed. Patient-written. */
+  othersNoticed?: string;
+  /** Talking points, most important first. */
   priorities: string[];
   askingFor: string[];
   /** Playbooks (script ids) to bring — B4. */

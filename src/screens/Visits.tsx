@@ -40,7 +40,7 @@ export function Visits({ adding = false }: { adding?: boolean }) {
           </div>
         </div>
 
-        <h2 className="section-label">Upcoming</h2>
+        <h2 className="visits-section"><span>Upcoming</span><span className="visits-section__count">{upcoming.length}</span></h2>
         {upcoming.length === 0 && (
           <div className="visit-card">
             <div><span className="visit-card__title">No visit coming up</span><span className="muted">Add one and we’ll help you get ready, step by step.</span></div>
@@ -49,7 +49,7 @@ export function Visits({ adding = false }: { adding?: boolean }) {
         )}
         {upcoming.map((v, i) => <UpcomingCard key={v.id} v={v} highlight={i === 0} />)}
 
-        <h2 className="section-label">Past</h2>
+        <h2 className="visits-section visits-section--past"><span>Past</span><span className="visits-section__count">{past.length}</span></h2>
         {past.length === 0 && <p className="small muted">None yet.</p>}
         {past.map((v) => <PastCard key={v.id} v={v} />)}
       </div>

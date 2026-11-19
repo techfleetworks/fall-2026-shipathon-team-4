@@ -10,7 +10,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Will my doctor see this?',
-    a: 'Only if you share it. You can show your summary in the room or send a link that expires.',
+    a: 'Only if you share it. You can show your notes for your doctor in the room or send a link that expires.',
   },
   {
     q: 'Is this a diagnosis or medical advice?',
