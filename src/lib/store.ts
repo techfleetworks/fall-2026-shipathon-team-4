@@ -49,11 +49,12 @@ export interface AppData {
 }
 
 interface AppActions {
-  completeOnboarding: (p: Omit<Profile, 'onboarded'>, nextVisit?: { date: string; clinician?: string; specialty?: string }) => void;
+  completeOnboarding: (p: Omit<Profile, 'onboarded'>, nextVisit?: { date: string; time?: string; clinician?: string; clinicianEmail?: string; affiliation?: string; specialty?: string; reason?: string }) => void;
   updateProfile: (p: Partial<Profile>) => void;
   setNextVisit: (date: string | undefined, clinician?: string, specialty?: string) => void;
   saveSummary: (s: Omit<CaseSummary, 'id' | 'createdAt'>) => void;
-  addEvidence: (e: Omit<Evidence, 'id'>) => void;
+  /** Returns the new entry's id. */
+  addEvidence: (e: Omit<Evidence, 'id'>) => string;
   deleteEvidence: (id: string) => void;
   addMedication: (m: Omit<Medication, 'id'>) => void;
   deleteMedication: (id: string) => void;
@@ -106,7 +107,13 @@ export const useApp = create<AppData & AppActions>()(
 
       completeOnboarding: (p, nextVisit) => {
         set({ profile: { ...p, onboarded: true } });
-        if (nextVisit) get().setNextVisit(nextVisit.date, nextVisit.clinician, nextVisit.specialty);
+        if (nextVisit) {
+          get().setNextVisit(nextVisit.date, nextVisit.clinician, nextVisit.specialty);
+          // The rest of the O7 details go on that same visit.
+          const { time, clinicianEmail, affiliation, reason } = nextVisit;
+          const v = selectUpcomingVisit(get());
+          if (v && v.date === nextVisit.date) get().updateVisit(v.id, { time, clinicianEmail, affiliation, reason });
+        }
       },
 
       updateProfile: (p) => set((s) => ({ profile: s.profile ? { ...s.profile, ...p } : s.profile })),
@@ -143,7 +150,11 @@ export const useApp = create<AppData & AppActions>()(
           return { summaries, evidence: [...s.evidence, evidence], visits };
         }),
 
-      addEvidence: (e) => set((s) => ({ evidence: [...s.evidence, { ...e, id: uid() }] })),
+      addEvidence: (e) => {
+        const id = uid();
+        set((s) => ({ evidence: [...s.evidence, { ...e, id }] }));
+        return id;
+      },
       deleteEvidence: (id) => set((s) => ({ evidence: s.evidence.filter((e) => e.id !== id) })),
 
       addMedication: (m) =>

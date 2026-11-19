@@ -207,8 +207,8 @@ function PrivacySection() {
     <>
       <h1>Privacy and data</h1>
       <div className="toggles">
-        <Toggle label="Make doctor-ready summaries from my words" on={!!consent.makeSummaries} onChange={(v) => setConsent({ makeSummaries: v })} />
-        <Toggle label="Help improve playbooks with anonymous ratings" on={!!consent.anonymousRatings} onChange={(v) => setConsent({ anonymousRatings: v })} />
+        <Toggle label="Use my words to make doctor summaries" on={!!consent.makeSummaries} onChange={(v) => setConsent({ makeSummaries: v })} />
+        <Toggle label="Help improve tips with anonymous ratings" on={!!consent.anonymousRatings} onChange={(v) => setConsent({ anonymousRatings: v })} />
         <Toggle
           label="Ask before every visit recording"
           on={state.profile?.askBeforeRecording !== false}

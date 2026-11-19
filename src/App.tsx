@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { afterOnboarding } from './lib/afterOnboarding';
 import { selectSignedIn, useApp } from './lib/store';
 import { Landing } from './screens/Landing';
 import { Onboarding } from './screens/Onboarding';
@@ -31,7 +32,18 @@ function RequireOnboarded() {
 
 function PublicOnly() {
   const signedIn = useApp(selectSignedIn);
-  return signedIn ? <Navigate to="/home" replace /> : <Outlet />;
+  return signedIn ? <LeavePublicPages /> : <Outlet />;
+}
+
+/** Signed in on a public page: go Home, or, right after onboarding, where onboarding chose. */
+function LeavePublicPages() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    // Read after the click that finished onboarding, so its choice is already set.
+    navigate(pathname === '/welcome' ? afterOnboarding() : '/home', { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }
 
 function PeerRedirect() {
