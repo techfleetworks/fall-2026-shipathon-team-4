@@ -11,8 +11,7 @@ import { draftPlaybook } from '../../lib/playbook';
 import { suggestQuestions } from '../../lib/questions/suggest';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { isLinkActive, selectLatestSummary, selectVisitSummary, useApp, useDraft } from '../../lib/store';
-import { requestPrepSummary } from '../../lib/api';
-import { translateStoryGuarded } from '../../lib/engine';
+import { requestStorySummary } from '../../lib/storySummary';
 import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
 import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
 import type { FieldKey, ShareLink, StoryDraft, Visit } from '../../lib/types';
@@ -98,16 +97,14 @@ export function NameHowIFeel() {
     setSaving(true);
     setSaveError(null);
     const { overrides, ...engineInput } = current;
-    let out = await requestPrepSummary(engineInput as StoryDraft);
-    if (out.status === 'unavailable') {
-      const local = translateStoryGuarded(engineInput as StoryDraft);
-      out = local.status === 'blocked' ? { status: 'blocked', message: local.message } : local;
-    }
+    // Server first; the built-in engine when the server can't be reached or this account has no server sign-in.
+    const out = await requestStorySummary(engineInput as StoryDraft);
     setSaving(false);
     if (out.status === 'crisis') return toHelp();
     if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(to);
     if (out.status === 'blocked') return setSaveError(out.message);
     if (out.status === 'rejected') return setSaveError(out.error.message);
+    if (out.status === 'unavailable') return setSaveError(out.message);
     saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides), visitId: visit.id });
     reset();
     navigate(to);
