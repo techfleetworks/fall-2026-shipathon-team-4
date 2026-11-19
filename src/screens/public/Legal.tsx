@@ -59,7 +59,7 @@ const DOCS: Record<string, Doc> = {
         body: (
           <ul>
             <li>No one, by default — your information isn’t visible to anyone else unless you choose to share it.</li>
-            <li>When you choose: show your summary in the room, or send your doctor a link that expires. You can stop sharing anytime.</li>
+            <li>When you choose: show your notes for your doctor in the room, or send your doctor a link that expires. You can stop sharing anytime.</li>
             <li>Our AI provider processes your words to create your summary, under contract not to train its models on your data.</li>
             <li>We never sell your data, run ads, or give it to advertisers.</li>
             <li>We never share your individual health conversations with a payer — or anyone — without your explicit consent.</li>

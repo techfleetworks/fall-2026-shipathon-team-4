@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Shell } from '../../components/Shell';
 import { formatShort, todayISO } from '../../lib/dates';
-import { selectLatestSummary, selectUpcomingVisit, selectVisitNeedingCheckIn, useApp, type AppData } from '../../lib/store';
+import { selectUpcomingVisit, selectVisitNeedingCheckIn, selectVisitSummary, useApp, type AppData } from '../../lib/store';
 import type { Visit } from '../../lib/types';
 
 export type Stage = 'before' | 'at' | 'after';
@@ -24,19 +24,19 @@ export function useVisitParam(): Visit | null {
 }
 
 export function beforeSteps(s: AppData, v: Visit) {
-  const latest = selectLatestSummary(s);
+  const latest = selectVisitSummary(s, v);
   return [
     { slug: '', label: 'Name how I feel', done: !!latest },
-    { slug: 'summary', label: 'Doctor summary', done: !!latest },
-    { slug: 'brief', label: 'Talking points', done: v.priorities.length > 0 },
-    { slug: 'today', label: 'Prep', done: !!v.prep && (v.prep.checks.length > 0 || prepFeelings(v.prep).length > 0) },
+    { slug: 'summary', label: 'Notes for your doctor', done: !!latest },
+    { slug: 'brief', label: 'Appointment talking points', done: v.priorities.length > 0 },
+    { slug: 'today', label: 'Before you go', done: !!v.prep && (v.prep.checks.length > 0 || prepFeelings(v.prep).length > 0) },
     { slug: 'share', label: 'Share', done: !!v.shared },
   ];
 }
 
 export function afterSteps(s: AppData, v: Visit) {
   return [
-    { slug: '', label: 'Recap', done: !!v.recap?.doctorSaid.length || !!v.notes?.trim() },
+    { slug: '', label: 'Visit summary', done: !!v.recap?.doctorSaid.length || !!v.notes?.trim() },
     { slug: 'check-in', label: 'Check-in', done: !!v.checkIn },
     { slug: 'next-steps', label: 'Next steps', done: s.followUps.some((f) => f.visitId === v.id) },
   ];
@@ -55,11 +55,13 @@ interface LayoutProps {
   /** Current left-nav step slug ('' = first). Omit to hide the step list. */
   step?: string;
   crumbExtra?: string;
+  /** When set, a click on another step calls this (so the page can save first) instead of following the link. */
+  onStepNavigate?: (to: string) => void;
   children: ReactNode;
 }
 
 /** Visits › date · doctor, then Before / At / After tabs, then the step list + content. */
-export function VisitLayout({ visit, stage, step, crumbExtra, children }: LayoutProps) {
+export function VisitLayout({ visit, stage, step, crumbExtra, onStepNavigate, children }: LayoutProps) {
   const state = useApp();
   const steps = stage === 'before' ? beforeSteps(state, visit) : stage === 'after' ? afterSteps(state, visit) : null;
   const base = `/visits/${visit.id}`;
@@ -79,7 +81,8 @@ export function VisitLayout({ visit, stage, step, crumbExtra, children }: Layout
             <ol className="steps-nav" aria-label="Steps">
               {steps.map((s, i) => (
                 <li key={s.slug}>
-                  <Link to={`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`} aria-current={step === s.slug ? 'step' : undefined}>
+                  <Link to={`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`} aria-current={step === s.slug ? 'step' : undefined}
+                    onClick={onStepNavigate && step !== s.slug ? (e) => { e.preventDefault(); onStepNavigate(`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`); } : undefined}>
                     {i + 1} · {s.label}{s.done && <span aria-label=" (done)"> ✓</span>}
                   </Link>
                 </li>
@@ -96,7 +99,7 @@ export function VisitLayout({ visit, stage, step, crumbExtra, children }: Layout
 }
 
 /** Dialog over a dark backdrop (V2, B6, A2). Esc and the backdrop close it. */
-export function Modal({ title, onClose, children, labelledBy = 'modal-title' }: { title: string; onClose: () => void; children: ReactNode; labelledBy?: string }) {
+export function Modal({ title, onClose, children, labelledBy = 'modal-title', closeButton = false }: { title: string; onClose: () => void; children: ReactNode; labelledBy?: string; /** Show a × close button in the top right corner. */ closeButton?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -115,7 +118,8 @@ export function Modal({ title, onClose, children, labelledBy = 'modal-title' }: 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
-        <h2 id={labelledBy}>{title}</h2>
+        <h2 id={labelledBy} className={closeButton ? 'modal__title--close' : undefined}>{title}</h2>
+        {closeButton && <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>×</button>}
         {children}
       </div>
     </div>

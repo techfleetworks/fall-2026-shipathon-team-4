@@ -11,7 +11,7 @@ import type { Answer3, CheckIn, FollowUp } from '../../lib/types';
 import { useVisitParam, VisitLayout } from './common';
 
 /* ======================================================================
-   F1 · Recap — what the doctor said + your talking points
+   F1 · Visit summary — what the doctor said + your talking points
    ====================================================================== */
 
 export function RecapStep() {
@@ -25,7 +25,7 @@ export function RecapStep() {
   const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
 
-  // No recap yet? Quick notes become the starting point. Patient confirms with "Fix something".
+  // No recap yet? Quick notes become the starting point. Patient confirms with "Edit".
   const fromNotes = (visit.notes ?? '').split(/\n|(?<=[.?!])\s+/).map((l) => l.trim()).filter((l) => l.length > 2);
   const points = visit.recap?.doctorSaid.length ? visit.recap.doctorSaid : fromNotes;
   const source = visit.recap?.doctorSaid.length ? visit.recap.source : fromNotes.length ? 'notes' : undefined;
@@ -39,9 +39,9 @@ export function RecapStep() {
     setEditing(false);
   };
   const share = async () => {
-    const text = [`Visit recap · ${formatShort(visit.date)}`, '', 'What the doctor said:', ...points.map((p) => `• ${p}`), '', 'My talking points:',
+    const text = [`Visit summary · ${formatShort(visit.date)}`, '', 'What the doctor said:', ...points.map((p) => `• ${p}`), '', 'My appointment talking points:',
       ...visit.priorities.map((p) => `${covered.includes(p) ? '✓' : '○'} ${p}`)].join('\n');
-    showToast(await shareText('Visit recap', text));
+    showToast(await shareText('Visit summary', text));
   };
 
   return (
@@ -68,7 +68,7 @@ export function RecapStep() {
               )}
             </div>
             <div>
-              <span className="eyebrow-soft">Your talking points</span>
+              <span className="eyebrow-soft">Your appointment talking points</span>
               {visit.priorities.length ? (
                 <ul className="ticks">
                   {visit.priorities.map((p) => (
@@ -80,21 +80,22 @@ export function RecapStep() {
           </div>
         )}
         <p className="note">Plain words, about a 6th-grade reading level. Check anything unclear with your doctor.</p>
-        <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
+      </section>
+      <div className="b1-footer">
+        <span className="spacer" />
           {editing ? (
             <>
               <button className="btn btn--outline" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="btn btn--primary" onClick={save}>Save recap</button>
+              <button className="btn btn--primary" onClick={save}>Save changes</button>
             </>
           ) : (
             <>
-              <button className="btn btn--outline" onClick={startEdit}>{points.length ? 'Fix something' : 'Type key points'}</button>
+              <button className="btn btn--outline" onClick={startEdit}>{points.length ? 'Edit' : 'Type key points'}</button>
               <button className="btn btn--outline" onClick={share} disabled={!points.length}>Share</button>
-              <Link to={`/visits/${visit.id}/after/check-in`} className="btn btn--primary">Next: check-in</Link>
+              <Link to={`/visits/${visit.id}/after/check-in`} className="btn btn--primary">Continue</Link>
             </>
           )}
-        </div>
-      </section>
+      </div>
       {toast}
     </VisitLayout>
   );
@@ -135,12 +136,12 @@ export function CheckInStep() {
           <ChipSelect label="Was a next step agreed" options={['Yes', 'Not clear', 'No']} value={agreed} onChange={(v) => setAgreed(v as CheckIn['nextStepAgreed'])} />
         </section>
         <section className="panel">
-          <span className="eyebrow-soft">Did a playbook help?</span>
-          <ChipSelect label="Did a playbook help" options={['Yes', 'A little', 'No']} value={helped} onChange={(v) => setHelped(v as Answer3)} />
+          <span className="eyebrow-soft">Did a tip help?</span>
+          <ChipSelect label="Did a tip help" options={['Yes', 'A little', 'No']} value={helped} onChange={(v) => setHelped(v as Answer3)} />
         </section>
       </div>
       <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn btn--primary" disabled={!heard || !agreed} onClick={save}>Save</button>
+        <button className="btn btn--primary" disabled={!heard || !agreed} onClick={save}>Continue</button>
       </div>
     </VisitLayout>
   );
@@ -169,6 +170,7 @@ export function NextStepsStep() {
   const [who, setWho] = useState('You');
   const [due, setDue] = useState(addDays(todayISO(), 14));
   const [tip, setTip] = useState('');
+  const [adding, setAdding] = useState(false);
   const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
 
@@ -186,6 +188,7 @@ export function NextStepsStep() {
     if (hasCrisisLanguage(t, who)) { navigate('/help/now'); return; }
     state.addFollowUp({ visitId: visit.id, step: t, owner: who.trim() || 'You', dueDate: due, reminder: false, isVisit: /visit|appointment/i.test(t) });
     setWhat('');
+    setAdding(false);
   };
   const shareTip = () => {
     if (hasCrisisLanguage(tip)) { navigate('/help/now'); return; }
@@ -197,13 +200,8 @@ export function NextStepsStep() {
   return (
     <VisitLayout visit={visit} stage="after" step="next-steps">
       <div className="f3-grid">
-        <section className="panel">
+        <section className="panel f3-steps">
           <span className="eyebrow-soft">Next steps</span>
-          {notAgreed && (
-            <div className="note">
-              No clear next step? You can still ask. <Link to="/escalation">See what to say</Link>
-            </div>
-          )}
           {steps.length === 0 && <p className="muted" style={{ margin: 0 }}>Add what was promised, who does it, and by when.</p>}
           <ul className="found">
             {steps.map((f) => (
@@ -213,15 +211,16 @@ export function NextStepsStep() {
                   {f.outcome && <span className="small muted"> · {f.outcome.toLowerCase()}</span>}
                 </span>
                 {f.outcome ? null : f.isVisit ? (
-                  <Link className="btn btn--outline btn--sm" to={`/visits/new?date=${f.dueDate}${visit.clinician ? `&with=${encodeURIComponent(visit.clinician)}` : ''}`}>Add visit</Link>
+                  <Link className="btn btn--outline btn--sm f3-action" to={`/visits/new?date=${f.dueDate}${visit.clinician ? `&with=${encodeURIComponent(visit.clinician)}` : ''}`}>Add visit</Link>
                 ) : f.reminder !== false ? (
-                  <button className="tag tag--btn" onClick={() => state.updateFollowUp(f.id, { reminder: false })} aria-label={`Reminder set for ${f.step}. Tap to turn off.`}>Reminder set</button>
+                  <button className="btn btn--outline btn--sm f3-action" aria-pressed="true" onClick={() => state.updateFollowUp(f.id, { reminder: false })} aria-label={`Reminder set for ${f.step}. Tap to turn off.`}>Reminder set</button>
                 ) : (
-                  <button className="btn btn--outline btn--sm" onClick={() => state.updateFollowUp(f.id, { reminder: true })}>Remind me</button>
+                  <button className="btn btn--outline btn--sm f3-action" onClick={() => state.updateFollowUp(f.id, { reminder: true })}>Remind me</button>
                 )}
               </li>
             ))}
           </ul>
+          {adding ? (
           <form className="add-step" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <div className="field">
               <label htmlFor="what">Add a next step</label>
@@ -238,20 +237,33 @@ export function NextStepsStep() {
                 <input id="by" type="date" className="input" value={due} onChange={(e) => setDue(e.target.value)} />
               </div>
             </div>
-            <button className="btn btn--outline btn--sm" type="submit" disabled={!what.trim()} style={{ alignSelf: 'flex-start' }}>Add step</button>
+            <div className="btn-row">
+              <button className="btn btn--outline btn--sm" type="submit" disabled={!what.trim()}>Add step</button>
+              <button type="button" className="link-btn" onClick={() => { setWhat(''); setAdding(false); }}>Cancel</button>
+            </div>
           </form>
+          ) : (
+            <button type="button" className="link-btn priority-add" onClick={() => setAdding(true)}>+ Add a next step</button>
+          )}
           {watch && <div className="note">If the {watch.step.toLowerCase()} hasn’t come by {formatShort(watch.dueDate)}, we’ll help you follow up.</div>}
+          {/* At the bottom of the panel, under the steps. */}
+          {notAgreed && (
+            <div className="note" style={{ marginTop: 'auto' }}>
+              No clear next step? You can still ask. <Link to={`/escalation?visit=${visit.id}`}>See what to say</Link>
+            </div>
+          )}
         </section>
 
+        <div className="b4-side">
         <section className="panel">
           <span className="eyebrow-soft">Share what helped</span>
           <p style={{ margin: 0 }}>
             {helpedScript && (helped === 'Yes' || helped === 'A little')
-              ? `“${helpedScript.situation.replace(/^If you hear /, '').replace(/^“|”$/g, '')}” helped you. Want to help others?`
+              ? `“${helpedScript.situation.replace(/[“”]/g, '‘').replace(/‘([^‘]*)‘/, '‘$1’')}” helped you. Want to help others?`
               : 'Your tip can help the next person walk in prepared.'}
           </p>
           <div className="field">
-            <label htmlFor="tip">Add a tip <span className="muted">(optional)</span></label>
+            <label htmlFor="tip">Add what helped you <span className="muted">(optional)</span></label>
             <textarea id="tip" className="textarea" value={tip} onChange={(e) => setTip(e.target.value)} placeholder="e.g., asking them to note it in my chart changed the conversation" />
           </div>
           <button className="btn btn--primary btn--block" disabled={!tip.trim() && !helped} onClick={shareTip}>Share anonymously</button>
@@ -259,6 +271,11 @@ export function NextStepsStep() {
             Leave out names and places. {anon ? 'Shared without your name once sharing is live.' : 'Anonymous sharing is off, so this stays on your device. Turn it on in Settings → Privacy.'}
           </p>
         </section>
+          <div className="b1-footer" style={{ marginTop: 0 }}>
+            <span className="spacer" />
+            <Link to="/visits" className="btn btn--primary">Finish</Link>
+          </div>
+        </div>
       </div>
       {toast}
     </VisitLayout>

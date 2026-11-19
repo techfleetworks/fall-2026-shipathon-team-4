@@ -75,7 +75,14 @@ export function useSpeechInput(value: string, onChange: (v: string) => void) {
     'aria-pressed': listening,
   };
 
-  return { supported: !!Ctor, listening, buttonProps };
+  /** Props for a press-to-start, press-to-stop button. */
+  const toggleProps = {
+    type: 'button' as const,
+    onClick: () => (listening ? stop() : start()),
+    'aria-pressed': listening,
+  };
+
+  return { supported: !!Ctor, listening, buttonProps, toggleProps };
 }
 
 /** "Hold to talk" or type. Where speech isn't supported, only the text box shows. */

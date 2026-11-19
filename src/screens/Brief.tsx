@@ -6,17 +6,16 @@ import { formatDate, formatShort } from '../lib/dates';
 import { hasCrisisLanguage } from '../lib/safety';
 import type { BriefSnapshot, Visit } from '../lib/types';
 
-const MAX_PRIORITIES = 3;
-
 export function suggestionsFrom(symptoms?: string): string[] {
   if (!symptoms || symptoms === 'Not discussed') return [];
   return symptoms.split('; ');
 }
 
-export function Priorities({ visit, update, suggestions, bare = false }: { visit: Visit; update: (p: Partial<Visit>) => void; suggestions: string[]; bare?: boolean }) {
+export function Priorities({ visit, update, suggestions, bare = false, addLink = false }: { visit: Visit; update: (p: Partial<Visit>) => void; suggestions: string[]; bare?: boolean; /** Show a "+ Add a priority" link that opens the input and suggestions. */ addLink?: boolean }) {
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [adding, setAdding] = useState(!addLink);
   const items = visit.priorities;
 
   const move = (from: number, to: number) => {
@@ -28,20 +27,20 @@ export function Priorities({ visit, update, suggestions, bare = false }: { visit
   };
   const add = (text: string) => {
     const t = text.trim();
-    if (!t || items.length >= MAX_PRIORITIES) return;
+    if (!t) return;
     if (hasCrisisLanguage(t)) {
       navigate('/help/now');
       return;
     }
     update({ priorities: [...items, t] });
     setDraft('');
+    if (addLink) setAdding(false);
   };
   const unused = suggestions.filter((s) => !items.includes(s));
 
   return (
     <section className={bare ? 'stack' : 'card'} aria-label="Talking points">
       {!bare && <h3>Top priorities (drag to reorder)</h3>}
-      {items.length === 0 && <p className="muted small">Add up to three things you most need to cover.</p>}
       <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {items.map((p, i) => (
           <li
@@ -54,16 +53,19 @@ export function Priorities({ visit, update, suggestions, bare = false }: { visit
             style={dragIndex === i ? { opacity: 0.5 } : undefined}
           >
             <span className="drag-handle" aria-hidden="true"><IconGrip /></span>
-            <span className="priority__text">{i + 1}. {p}</span>
+            <span className="priority__text"><strong>{i + 1}.</strong> {p}</span>
             <button className="icon-btn" aria-label={`Move "${p}" up`} disabled={i === 0} onClick={() => move(i, i - 1)}><IconUp width={16} height={16} /></button>
             <button className="icon-btn" aria-label={`Move "${p}" down`} disabled={i === items.length - 1} onClick={() => move(i, i + 1)}><IconDown width={16} height={16} /></button>
             <button className="icon-btn" aria-label={`Remove "${p}"`} onClick={() => update({ priorities: items.filter((_, j) => j !== i) })}><IconTrash width={16} height={16} /></button>
           </li>
         ))}
       </ol>
-      {items.length < MAX_PRIORITIES && (
+      {!adding && (
+        <button type="button" className="link-btn priority-add" onClick={() => setAdding(true)}>+ Add a priority</button>
+      )}
+      {adding && (
         <>
-          {unused.length > 0 && (
+          {!addLink && unused.length > 0 && (
             <div className="stack-sm">
               <span className="small muted">From your story:</span>
               <div className="chips">
@@ -75,8 +77,10 @@ export function Priorities({ visit, update, suggestions, bare = false }: { visit
           )}
           <form className="row" onSubmit={(e) => { e.preventDefault(); add(draft); }}>
             <label htmlFor="newp" className="sr-only">Add a priority</label>
-            <input id="newp" className="input" placeholder="+ Add a priority, in your words" value={draft} onChange={(e) => setDraft(e.target.value)} />
+            <input id="newp" className="input" autoFocus={addLink} placeholder="+ Add a priority, in your words" value={draft} onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (addLink && e.key === 'Escape') { setDraft(''); setAdding(false); } }} />
             <button className="btn btn--sm" type="submit" disabled={!draft.trim()}>Add</button>
+            {addLink && <button type="button" className="link-btn" onClick={() => { setDraft(''); setAdding(false); }}>Cancel</button>}
           </form>
         </>
       )}

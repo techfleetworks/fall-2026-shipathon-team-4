@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { formatDate } from '../lib/dates';
 import { useApp } from '../lib/store';
@@ -39,12 +39,17 @@ export function Breathing() {
 
 export function Escalation() {
   const scripts = SCRIPTS.filter((s) => s.category === 'Escalate' || s.id === 'doc-declined' || s.id === 'doc-chart');
+  // Came from a visit's Next steps (?visit=<id>): go back there. Otherwise, Home.
+  const [params] = useSearchParams();
+  const visitId = params.get('visit');
+  const visit = useApp((s) => (visitId ? s.visits.find((v) => v.id === visitId) : undefined));
+  const back = visit ? { to: `/visits/${visit.id}/after/next-steps`, label: 'Back to next steps', button: 'Back to next steps' } : { to: '/home', label: 'Home', button: 'Back to Home' };
   return (
-    <Shell header={{ kind: 'sub', title: 'No clear next step', back: '/home', backLabel: 'Home', right: <span /> }} tabs>
+    <Shell header={{ kind: 'sub', title: 'No clear next step', back: back.to, backLabel: back.label, right: <span /> }} tabs>
       <h1>You can still ask.</h1>
       <p className="lead">Leaving without a plan is common — and you can follow up. Call the office or send a portal message with one of these.</p>
       {scripts.map((s) => <ScriptCard key={s.id} script={s} />)}
-      <Link to="/home" className="btn btn--block">Back to Home</Link>
+      <Link to={back.to} className="btn btn--block">{back.button}</Link>
     </Shell>
   );
 }
@@ -58,7 +63,7 @@ export function FollowUpScreen() {
 
   const choose = (o: 'Happened' | 'Not yet' | 'Didn’t happen') => {
     log(f.id, o);
-    navigate(o === 'Happened' ? '/playbooks/rate' : '/escalation', { replace: true });
+    navigate(o === 'Happened' ? '/playbooks/rate' : `/escalation${f.visitId ? `?visit=${f.visitId}` : ''}`, { replace: true });
   };
 
   return (

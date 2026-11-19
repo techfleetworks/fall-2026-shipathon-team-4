@@ -74,7 +74,8 @@ interface AppActions {
   setNotifications: (p: Partial<NotificationPrefs>) => void;
   savePlaybook: (p: Omit<MyPlaybook, 'id' | 'createdAt'>) => string;
   deletePlaybook: (id: string) => void;
-  createShareLink: (snapshot: ShareLink['snapshot'], days: number) => ShareLink;
+  /** The link lasts `days` from `startsAt` (e.g. the visit date), or from now if that is later or not given. */
+  createShareLink: (snapshot: ShareLink['snapshot'], days: number, startsAt?: Date) => ShareLink;
   revokeShareLink: (id: string) => void;
   /** Fills the app with Theo's demo data: from the server when given (ADR-010), else the built-in copy. */
   loadDemo: (data?: Partial<AppData>) => void;
@@ -157,8 +158,8 @@ export const useApp = create<AppData & AppActions>()(
 
       addVisit: (v) => {
         const id = uid();
-        // Only the next upcoming visit inherits talking points from the latest story.
-        set((s) => ({ visits: [...s.visits, { id, ...v, priorities: v.date >= todayISO() ? defaultPriorities(s) : [], askingFor: [] }] }));
+        // A new visit starts empty: every Before step is still to do.
+        set((s) => ({ visits: [...s.visits, { id, ...v, createdAt: new Date().toISOString(), priorities: [], askingFor: [] }] }));
         return id;
       },
       addFollowUp: (f) => set((s) => ({ followUps: [...s.followUps, { ...f, id: uid() }] })),
@@ -225,15 +226,16 @@ export const useApp = create<AppData & AppActions>()(
       },
       deletePlaybook: (id) => set((s) => ({ myPlaybooks: (s.myPlaybooks ?? []).filter((p) => p.id !== id) })),
 
-      createShareLink: (snapshot, days) => {
+      createShareLink: (snapshot, days, startsAt) => {
         const now = new Date();
+        const start = startsAt && startsAt.getTime() > now.getTime() ? startsAt : now;
         const bytes = crypto.getRandomValues(new Uint8Array(12));
         const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
         const link: ShareLink = {
           id: uid(),
           token,
           createdAt: now.toISOString(),
-          expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString(),
+          expiresAt: new Date(start.getTime() + days * 86_400_000).toISOString(),
           snapshot,
         };
         set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
@@ -278,6 +280,35 @@ export const SYNC_STORAGE_KEY = 'get-heard-sync';
 /** Has an account on this device AND hasn't logged out. */
 export const selectSignedIn = (s: Pick<AppData, 'profile' | 'signedIn'>) => !!s.profile?.onboarded && s.signedIn !== false;
 /** An account exists on this device (signed in or not). */
+/**
+ * Which visit a story belongs to: the one it was saved for. Older stories without that link belong to the
+ * visit added most recently before them, or to no particular visit if they came before any of those.
+ */
+function storyOwner(sum: CaseSummary, visits: Pick<Visit, 'id' | 'createdAt'>[]): string | undefined {
+  if (sum.visitId) return sum.visitId;
+  let owner: Pick<Visit, 'id' | 'createdAt'> | undefined;
+  for (const v of visits) {
+    if (v.createdAt && v.createdAt <= sum.createdAt && (!owner || v.createdAt > owner.createdAt!)) owner = v;
+  }
+  return owner?.id;
+}
+
+/**
+ * The latest story told for this visit, or undefined (an empty Name how I feel).
+ * Older visits (no createdAt) take the latest story that doesn't belong to a newer visit.
+ */
+export function selectVisitSummary(
+  s: { summaries: CaseSummary[]; visits?: Pick<Visit, 'id' | 'createdAt'>[] },
+  v: Pick<Visit, 'id' | 'createdAt'>,
+): CaseSummary | undefined {
+  const visits = s.visits ?? [];
+  for (let i = s.summaries.length - 1; i >= 0; i--) {
+    const owner = storyOwner(s.summaries[i], visits);
+    if (owner === v.id || (!v.createdAt && owner === undefined)) return s.summaries[i];
+  }
+  return undefined;
+}
+
 export const selectHasAccount = (s: Pick<AppData, 'profile'>) => !!s.profile?.onboarded;
 
 export function selectUpcomingVisit(s: Pick<AppData, 'visits'>): Visit | undefined {
@@ -329,8 +360,12 @@ export const emptyDraft = (): StoryDraft => ({
 
 interface DraftState {
   draft: StoryDraft;
+  /** The visit this draft was typed for. Opening a different visit starts a fresh draft. */
+  visitId?: string;
   update: (patch: Partial<StoryDraft>) => void;
   reset: () => void;
+  /** Start (or keep) the draft for this visit. A draft from another visit is cleared. */
+  startFor: (visitId: string) => void;
 }
 
 export const useDraft = create<DraftState>()(
@@ -339,6 +374,7 @@ export const useDraft = create<DraftState>()(
       draft: emptyDraft(),
       update: (patch) => set((s) => ({ draft: { ...s.draft, ...patch } })),
       reset: () => set({ draft: emptyDraft() }),
+      startFor: (visitId) => set((s) => (s.visitId === visitId ? s : { draft: emptyDraft(), visitId })),
     }),
     { name: 'get-heard-draft', storage: createJSONStorage(() => sessionStorage) },
   ),
