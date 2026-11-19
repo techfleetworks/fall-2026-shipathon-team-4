@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useSpeechInput } from '../../components/TalkOrType';
 import { Checkbox, Chip, ChipMulti, useToast } from '../../components/ui';
@@ -50,7 +50,9 @@ export function NameHowIFeel() {
   const latest = useApp(selectLatestSummary);
   // The story already saved for this visit: shown again when the person comes back to this step.
   const saved = useApp((s) => (visit ? selectVisitSummary(s, visit) : undefined));
-  useEffect(() => {
+  // Before paint, so text typed for another visit never shows here.
+  useLayoutEffect(() => {
+    if (visit) useDraft.getState().startFor(visit.id);
     if (!saved || useDraft.getState().draft.opening.trim()) return;
     const overrides: Partial<Record<FieldKey, string>> = {};
     saved.fields.forEach((f) => { if (f.editedByPatient) overrides[f.key] = f.clinical; });
@@ -106,7 +108,7 @@ export function NameHowIFeel() {
     if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(to);
     if (out.status === 'blocked') return setSaveError(out.message);
     if (out.status === 'rejected') return setSaveError(out.error.message);
-    saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides) });
+    saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides), visitId: visit.id });
     reset();
     navigate(to);
   };
@@ -375,7 +377,7 @@ export function DoctorSummaryStep() {
       const before = f.clinical === 'Not discussed' ? '' : f.clinical;
       return v === before ? f : { ...f, clinical: v || 'Not discussed', editedByPatient: true };
     });
-    if (fields.some((f, i) => f !== latest.fields[i])) state.saveSummary({ opening: latest.opening, fields });
+    if (fields.some((f, i) => f !== latest.fields[i])) state.saveSummary({ opening: latest.opening, fields, visitId: latest.visitId ?? visit.id });
     const n = vals.noticed?.trim() ?? '';
     if (n !== (visit.othersNoticed ?? '')) state.updateVisit(visit.id, { othersNoticed: n || undefined });
     setEditing(false);

@@ -51,6 +51,8 @@ export interface CaseSummary {
   createdAt: string; // ISO
   opening: string; // "You said"
   fields: SummaryField[];
+  /** The visit this story was told for (Name how I feel). Missing on stories saved before visits had their own. */
+  visitId?: string;
 }
 
 export type EvidenceType = 'visit' | 'medication' | 'symptom' | 'note' | 'follow-up';
