@@ -59,11 +59,11 @@ export function Landing() {
           </div>
           <div className="pcard">
             <span className="eyebrow">At the visit</span>
-            <p><strong>Be clear, not confused.</strong> A doctor summary and help in the moment.</p>
+            <p><strong>Be clear, not confused.</strong> Notes for your doctor and help in the moment.</p>
           </div>
           <div className="pcard">
             <span className="eyebrow">After the visit</span>
-            <p><strong>Know what’s next.</strong> An after-visit recap and to-do list with follow-up reminders.</p>
+            <p><strong>Know what’s next.</strong> An after-visit summary and to-do list with follow-up reminders.</p>
           </div>
         </section>
 

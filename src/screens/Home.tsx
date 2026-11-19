@@ -11,7 +11,7 @@ import {
   selectVisitNeedingCheckIn,
   useApp,
 } from '../lib/store';
-import { formatTime } from './visit/common';
+import { beforeSteps, formatTime } from './visit/common';
 
 /** "Remind later" hides the next step until tomorrow. Per-device convenience only. */
 const SNOOZE_KEY = 'home-next-step-snooze';
@@ -44,9 +44,9 @@ export function Home() {
   const days = upcoming ? daysUntil(upcoming.date) : undefined;
   const headline = days === undefined
     ? 'Let’s get ready for your next visit.'
-    : days <= 0 ? 'Your visit is today.'
-      : days === 1 ? 'Your visit is tomorrow.'
-        : `Your visit is in ${days} days.`;
+    : days <= 0 ? 'Your next visit is today.'
+      : days === 1 ? 'Your next visit is tomorrow.'
+        : `Your next visit is in ${days} days.`;
 
   const activity = [
     ...state.evidence.map((e) => ({ id: e.id, date: e.date, text: `${e.title}: ${e.detail}`, to: '/visits/history' })),
@@ -57,7 +57,8 @@ export function Home() {
     .slice(0, 3);
 
   // "Before the visit": the three things that make the doctor summary ready.
-  const beforeDone = [!!latest, !!upcoming && upcoming.priorities.length > 0, !!upcoming && upcoming.askingFor.length > 0];
+  // Name how I feel, talking points, and Before you go.
+  const beforeDone = upcoming ? [0, 2, 3].map((i) => beforeSteps(state, upcoming)[i].done) : [false, false, false];
   const doneCount = beforeDone.filter(Boolean).length;
   const forDoctor = upcoming?.clinician ? ` for ${upcoming.clinician}` : '';
 
@@ -69,8 +70,8 @@ export function Home() {
     next = { title: 'How did your visit go?', body: 'About 30 seconds. It helps you follow up, and helps people like you.', cta: 'Start check-in', to: `/visits/${needsCheckIn.id}/after` };
   } else if (prefs.morningOf && upcoming && upcoming.date === today) {
     next = { title: 'It’s visit day.', body: 'Three small things before you go. Skip any.', cta: 'Start now', to: `/visits/${upcoming.id}/before/today` };
-  } else if (!latest) {
-    next = { title: 'Tell us how you’ve been feeling over the past two weeks.', body: `About 3 minutes. We’ll add it to your summary${forDoctor}.`, cta: 'Start now', to: upcoming ? `/visits/${upcoming.id}/before` : '/visits/new' };
+  } else if (upcoming ? !beforeDone[0] : !latest) {
+    next = { title: 'Tell us how you’ve been feeling recently.', body: `About 3 minutes. We’ll add it to your summary${forDoctor}.`, cta: 'Review', to: upcoming ? `/visits/${upcoming.id}/before` : '/visits/new' };
   } else if (upcoming && doneCount < 3) {
     next = { title: 'Pick your talking points.', body: `About 2 minutes. Lead with what matters most${forDoctor ? ` to ${upcoming.clinician}` : ''}.`, cta: 'Start now', to: `/visits/${upcoming.id}/before/brief` };
   } else if (upcoming) {
@@ -98,6 +99,32 @@ export function Home() {
         <h1>Hi{firstName ? ` ${firstName}` : ''}. {headline}</h1>
 
         <div className="home-grid">
+          <section className="panel home-visit" aria-labelledby="visit-title">
+            <span className="eyebrow-soft">Upcoming visit</span>
+            {upcoming ? (
+              <>
+                <h2 id="visit-title" className="home-visit__when">
+                  {parseISO(upcoming.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {upcoming.time ? ` · ${formatTime(upcoming.time)}` : ''}
+                </h2>
+                {(upcoming.clinician || upcoming.specialty) && (
+                  <p style={{ margin: 0 }}>{[upcoming.clinician, upcoming.specialty].filter(Boolean).join(' · ')}</p>
+                )}
+                <div className="home-progress" role="img" aria-label={`Before the visit: ${doneCount} of 3 steps done`}>
+                  {beforeDone.map((d, i) => <span key={i} className={d ? 'on' : ''} />)}
+                </div>
+                <span className="small muted">Before the visit: {doneCount} of 3 steps done</span>
+                <Link to="/visits" className="btn btn--outline btn--block">View upcoming visits</Link>
+              </>
+            ) : (
+              <>
+                <h2 id="visit-title" className="home-visit__when">Not set yet</h2>
+                <p className="muted" style={{ margin: 0 }}>Add a date and we’ll help you get ready.</p>
+                <Link to="/visits/new" className="btn btn--outline btn--block">Add a visit</Link>
+              </>
+            )}
+          </section>
+
           <section className="panel panel--accent home-next" aria-labelledby="next-title">
             <span className="eyebrow-soft">Next step</span>
             {snoozed ? (
@@ -117,32 +144,12 @@ export function Home() {
             )}
           </section>
 
-          <section className="panel home-visit" aria-labelledby="visit-title">
-            <span className="eyebrow-soft">Upcoming visit</span>
-            {upcoming ? (
-              <>
-                <h2 id="visit-title" className="home-visit__when">
-                  {parseISO(upcoming.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {upcoming.time ? ` · ${formatTime(upcoming.time)}` : ''}
-                </h2>
-                {(upcoming.clinician || upcoming.specialty) && (
-                  <p style={{ margin: 0 }}>{[upcoming.clinician, upcoming.specialty].filter(Boolean).join(' · ')}</p>
-                )}
-                <div className="home-progress" role="img" aria-label={`Before the visit: ${doneCount} of 3 steps done`}>
-                  {beforeDone.map((d, i) => <span key={i} className={d ? 'on' : ''} />)}
-                </div>
-                <span className="small muted">Before the visit: {doneCount} of 3 steps done</span>
-                <Link to={`/visits/${upcoming.id}/before`} className="btn btn--outline btn--block">Open visit</Link>
-              </>
-            ) : (
-              <>
-                <h2 id="visit-title" className="home-visit__when">Not set yet</h2>
-                <p className="muted" style={{ margin: 0 }}>Add a date and we’ll help you get ready.</p>
-                <Link to="/visits/new" className="btn btn--outline btn--block">Add a visit</Link>
-              </>
-            )}
+          <section className="panel home-tip" aria-labelledby="tip-title">
+            <span className="eyebrow-soft">Suggested: What helped others</span>
+            <h2 id="tip-title" className="home-tip__title">{tip.title}</h2>
+            <p className="muted" style={{ margin: 0 }}>Saved by {tip.helped.of} people like you</p>
+            <Link to={`/playbooks/others/${tip.id}`} className="home-tip__open">Open</Link>
           </section>
-
           <section className="panel" aria-labelledby="activity-title">
             <span id="activity-title" className="eyebrow-soft">Recent activity</span>
             {activity.length === 0 ? (
@@ -159,12 +166,6 @@ export function Home() {
             )}
           </section>
 
-          <section className="panel home-tip" aria-labelledby="tip-title">
-            <span className="eyebrow-soft">Suggested tip</span>
-            <h2 id="tip-title" className="home-tip__title">“{tip.title}”</h2>
-            <p className="muted" style={{ margin: 0 }}>Tried by {tip.helped.of} people like you</p>
-            <Link to={`/playbooks/others/${tip.id}`} className="home-tip__open">Open</Link>
-          </section>
         </div>
       </div>
     </Shell>
