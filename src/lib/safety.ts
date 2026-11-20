@@ -7,6 +7,7 @@
  * NOTE: rule-based only. The PRD calls for a classifier + this keyword backstop;
  * the classifier comes with the API.
  */
+import { straightQuotes } from './text.js';
 const CRISIS_PATTERNS: RegExp[] = [
   /\bkill(ing)?\s+my\s*self\b/i,
   /\bsuicid(e|al)\b/i,
@@ -25,5 +26,6 @@ const CRISIS_PATTERNS: RegExp[] = [
 ];
 
 export function hasCrisisLanguage(...texts: (string | undefined)[]): boolean {
-  return texts.some((t) => !!t && CRISIS_PATTERNS.some((re) => re.test(t)));
+  // Smart quotes from phones ("don’t") must match the patterns' straight ones ("don't").
+  return texts.some((t) => !!t && CRISIS_PATTERNS.some((re) => re.test(straightQuotes(t))));
 }

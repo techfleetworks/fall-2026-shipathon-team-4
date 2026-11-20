@@ -11,6 +11,7 @@
  * time", "we'll reassess next month"). A sentence it can't rewrite is quoted, never guessed. It reports what was
  * said and never judges it; every sentence still goes through the guardrails (no diagnosis, advice or doses).
  */
+import { straightQuotes } from '../text.js';
 import { guardResponse, type Violation } from '../guardrails/index.js';
 import { hasCrisisLanguage } from '../safety.js';
 import { clinicianSpeakers } from '../transcript/recap.js';
@@ -183,7 +184,8 @@ export function summarizeVisit(
 }
 
 /** Summary from the patient's quick notes, when the visit wasn't recorded. */
-export function summarizeNotes(notes: string, { talkingPoints = [] }: { talkingPoints?: readonly string[] } = {}): AfterVisitResult {
+export function summarizeNotes(rawNotes: string, { talkingPoints = [] }: { talkingPoints?: readonly string[] } = {}): AfterVisitResult {
+  const notes = straightQuotes(rawNotes); // typed on a phone: "it’s probably…" must match "it's probably…"
   if (hasCrisisLanguage(notes, ...talkingPoints)) return { status: 'crisis' };
   // One item per line AND per sentence: people often type several points on one line.
   const lines = notes.split(/\n+/).flatMap((l) => sentencesOf(l.replace(/^[-•*]\s*/, '').trim())).filter(Boolean);

@@ -11,6 +11,7 @@
 import type { FieldKey, StoryDraft, SummaryField } from './types.js';
 // .js extension: this file also runs on the server (Node ES modules); Vite maps it to .ts.
 import { DISCLAIMERS } from './guardrails/copy.js';
+import { straightQuotes } from './text.js';
 
 interface Pair {
   match: RegExp;
@@ -75,7 +76,8 @@ function durationFromText(text: string): string | undefined {
 
 export function matchSymptoms(text: string): string[] {
   const found = new Set<string>();
-  for (const p of TRANSLATION_PAIRS) if (p.match.test(text)) found.add(p.clinical);
+  const t = straightQuotes(text); // "can’t sleep" typed on a phone matches "can't sleep"
+  for (const p of TRANSLATION_PAIRS) if (p.match.test(t)) found.add(p.clinical);
   return [...found];
 }
 
@@ -149,7 +151,7 @@ export interface QuickLine {
  * doctor-terms lines, updated live as the person types.
  */
 export function quickTranslate(text: string): QuickLine[] {
-  const t = text.trim();
+  const t = straightQuotes(text).trim();
   if (!t) return [];
   const lines: QuickLine[] = [];
   for (const p of TRANSLATION_PAIRS) if (p.match.test(t)) lines.push({ label: p.area, text: p.clinical });
