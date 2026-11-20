@@ -9,7 +9,7 @@
  * - Waits until the saved draft has finished loading, so a half-loaded draft is never sent.
  */
 import { useEffect, useState } from 'react';
-import { requestPrepSummary } from './api';
+import { requestStorySummary, SIGN_IN_EXPIRED_NOTE } from './storySummary';
 import { storyDraftHasCrisis } from './guardrails/enforce';
 import { useDraft } from './store';
 import type { FieldKey, StoryDraft, SummaryField } from './types';
@@ -20,7 +20,7 @@ export interface ServerSummary {
   status: ServerSummaryStatus;
   /** The engine's lines from the server (before the patient's own rewrites are applied). */
   fields: SummaryField[];
-  /** For 'blocked' and 'unavailable': a message safe to show. */
+  /** For 'blocked' and 'unavailable': a message safe to show. For 'ok': a note that doesn't block (expired sign-in). */
   message?: string;
 }
 
@@ -85,9 +85,10 @@ export function useServerSummary(draft: StoryDraft, delayMs = 500): ServerSummar
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       setState((s) => ({ ...s, status: 'loading' }));
-      requestPrepSummary(engineInput as StoryDraft, { signal: ctrl.signal }).then((out) => {
+      requestStorySummary(engineInput as StoryDraft, { signal: ctrl.signal }).then((out) => {
         if (ctrl.signal.aborted) return;
-        if (out.status === 'ok') setState({ status: 'ok', fields: out.fields });
+        // An expired sign-in doesn't block (the device engine answered); just say so (ADR-024).
+        if (out.status === 'ok') setState({ status: 'ok', fields: out.fields, ...(out.signInExpired ? { message: SIGN_IN_EXPIRED_NOTE } : {}) });
         else if (out.status === 'crisis') setState((s) => ({ ...s, status: 'crisis' }));
         else if (out.status === 'blocked') setState({ status: 'blocked', fields: PLACEHOLDER_FIELDS, message: out.message });
         // An empty story is fine while typing: keep the placeholders.
