@@ -9,7 +9,7 @@
  * - Waits until the saved draft has finished loading, so a half-loaded draft is never sent.
  */
 import { useEffect, useState } from 'react';
-import { requestPrepSummary } from './api';
+import { requestStorySummary } from './storySummary';
 import { storyDraftHasCrisis } from './guardrails/enforce';
 import { useDraft } from './store';
 import type { FieldKey, StoryDraft, SummaryField } from './types';
@@ -85,7 +85,7 @@ export function useServerSummary(draft: StoryDraft, delayMs = 500): ServerSummar
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       setState((s) => ({ ...s, status: 'loading' }));
-      requestPrepSummary(engineInput as StoryDraft, { signal: ctrl.signal }).then((out) => {
+      requestStorySummary(engineInput as StoryDraft, { signal: ctrl.signal }).then((out) => {
         if (ctrl.signal.aborted) return;
         if (out.status === 'ok') setState({ status: 'ok', fields: out.fields });
         else if (out.status === 'crisis') setState((s) => ({ ...s, status: 'crisis' }));
