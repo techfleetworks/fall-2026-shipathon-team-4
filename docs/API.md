@@ -402,6 +402,13 @@ Logic: `detectCues()` in `src/lib/cues/cues.ts`. No new medical wording; the sma
   **Save new password** → back to Log in with "Your password was changed." An old link shows "This link has expired" + **Get a new link**.
 - Hidden on the demo site. Wording is a draft.
 
+## 2s. Name how I feel never gets stuck on sign-in (ADR-024)
+
+Your fallback from `feat/user-test` is now permanent (`requestStorySummary` in `src/lib/storySummary.ts`, your commit kept).
+On a 401 the story is turned into doctor terms **on the device** and Continue moves on. Only someone whose real sign-in expired
+sees a note under the panel (it doesn't block): "Your sign-in has expired, so this was done on this device. Log in again to keep
+your record backed up." Wording is a draft.
+
 ## Drop-in pieces (ready to place anywhere)
 
 See them all on **`/demo/pieces`** (signed in, demo data). Not linked from the navigation; delete it once the

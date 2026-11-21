@@ -13,8 +13,7 @@ import { draftPlaybook } from '../../lib/playbook';
 import { suggestQuestions } from '../../lib/questions/suggest';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { isLinkActive, selectLatestSummary, selectVisitSummary, useApp, useDraft } from '../../lib/store';
-import { requestPrepSummary } from '../../lib/api';
-import { translateStoryGuarded } from '../../lib/engine';
+import { requestStorySummary } from '../../lib/storySummary';
 import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
 import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
 import type { FieldKey, ShareLink, StoryDraft, Visit } from '../../lib/types';
@@ -117,16 +116,14 @@ export function NameHowIFeel() {
     setSaving(true);
     setSaveError(null);
     const { overrides, ...engineInput } = current;
-    let out = await requestPrepSummary(engineInput as StoryDraft);
-    if (out.status === 'unavailable') {
-      const local = translateStoryGuarded(engineInput as StoryDraft);
-      out = local.status === 'blocked' ? { status: 'blocked', message: local.message } : local;
-    }
+    // Server first; the built-in engine when the server can't be reached or there's no valid server sign-in (ADR-024).
+    const out = await requestStorySummary(engineInput as StoryDraft);
     setSaving(false);
     if (out.status === 'crisis') return toHelp();
     if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(to);
     if (out.status === 'blocked') return setSaveError(out.message);
     if (out.status === 'rejected') return setSaveError(out.error.message);
+    if (out.status === 'unavailable') return setSaveError(out.message);
     saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides), visitId: visit.id });
     // Ticked by Continue or by moving to another step in the left panel.
     markStep(visit.id, '');
@@ -176,7 +173,7 @@ export function NameHowIFeel() {
         <section className="panel panel--accent" aria-labelledby="reads">
           <span id="reads" className="eyebrow-soft">Your doctor reads · updates as you go</span>
           {!showSaved && preview.status === 'loading' && <p className="note" role="status">Updating…</p>}
-          {!showSaved && (preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
+          {!showSaved && (preview.status === 'unavailable' || preview.status === 'blocked' || (preview.status === 'ok' && preview.message)) && <p className="note" role="status">{preview.message}</p>}
           <div className="kv">
             {fields.map((f) => (
               <div key={f.key} className="kv__row">
