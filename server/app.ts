@@ -21,8 +21,9 @@ import { explainResults } from '../src/lib/labs/results.js';
 import { SYNTHETIC_LABEL } from '../src/lib/transcript/constants.js';
 import { THEO_SAMPLE_TRANSCRIPT } from '../src/data/sampleTranscript.js';
 import { processTranscript } from '../src/lib/transcript/intake.js';
-import { summarizeNotes, summarizeVisit } from '../src/lib/afterVisit/summary.js';
+import { summarizeVisit } from '../src/lib/afterVisit/summary.js';
 import { extractActionItems } from '../src/lib/afterVisit/actionItems.js';
+import { summarizeVisitNotes } from '../src/lib/afterVisit/notesSummary.js';
 import { clinicianSpeakers, doctorSaidFrom } from '../src/lib/transcript/recap.js';
 import { authConfigFromEnv, requireUser, type AuthConfig, type AuthUser } from './auth.js';
 import { mappingEngineFromEnv } from './mapping/config.js';
@@ -329,11 +330,8 @@ export function createApp({
     if (!Array.isArray(talkingPoints) || talkingPoints.length > 3 || !talkingPoints.every((p) => typeof p === 'string' && p.length <= 300)) {
       return sendError(res, 400, 'INVALID_TEXT');
     }
-    const asTranscript = processTranscript(notes, 'paste');
-    if (asTranscript.status === 'crisis') return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });
-    const outcome = asTranscript.status === 'accepted'
-      ? summarizeVisit(asTranscript.payload, { talkingPoints })
-      : summarizeNotes(notes, { talkingPoints });
+    // Same function the app uses when it can't reach the server (src/lib/afterVisit/notesSummary.ts).
+    const outcome = summarizeVisitNotes(notes, { talkingPoints });
     switch (outcome.status) {
       case 'crisis':
         return res.status(200).json({ status: 'crisis', help: CRISIS_HELP });

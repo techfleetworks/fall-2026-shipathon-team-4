@@ -9,7 +9,8 @@
  * Theo's demo visit already has its summary from his transcript, so nothing runs for it.
  */
 import { useEffect } from 'react';
-import { requestNotesSummary } from '../api';
+import { requestNotesSummary, type NotesSummaryOutcome } from '../api';
+import { summarizeVisitNotes } from './notesSummary';
 import { todayISO } from '../dates';
 import { useApp } from '../store';
 import type { FollowUp, Visit } from '../types';
@@ -66,6 +67,17 @@ export function planAfterVisitUpdate(
   };
 }
 
+/**
+ * The server's answer, or, when it can't be reached or says "log in" (401), the same summary made on this device
+ * (ADR-024). The route stores nothing, so the device result is the same thing. Other answers are kept as they are.
+ */
+export function resolveNotesSummary(server: NotesSummaryOutcome, notes: string, priorities: readonly string[]): NotesSummaryOutcome {
+  const fallback = server.status === 'unavailable' || (server.status === 'rejected' && server.error.code === 'UNAUTHORIZED');
+  if (!fallback) return server;
+  const local = summarizeVisitNotes(notes, { talkingPoints: priorities.slice(0, 3) });
+  return local.status === 'blocked' ? { status: 'blocked', message: local.message } : local;
+}
+
 /** Runs the summary for this visit when needed. Call it at the top of the After screens. */
 export function useAfterVisitSummary(visit: Visit | null | undefined): void {
   const key = visit ? notesKey(visit.notes ?? '', visit.priorities) : '';
@@ -73,8 +85,10 @@ export function useAfterVisitSummary(visit: Visit | null | undefined): void {
   useEffect(() => {
     if (!visit || !due) return;
     const controller = new AbortController();
-    void requestNotesSummary(visit.notes ?? '', visit.priorities, { signal: controller.signal }).then((r) => {
-      if (controller.signal.aborted || r.status !== 'ok') return; // crisis is handled where the notes are typed
+    void requestNotesSummary(visit.notes ?? '', visit.priorities, { signal: controller.signal }).then((server) => {
+      if (controller.signal.aborted) return;
+      const r = resolveNotesSummary(server, visit.notes ?? '', visit.priorities);
+      if (r.status !== 'ok') return; // crisis is handled where the notes are typed
       const state = useApp.getState();
       const current = state.visits.find((v) => v.id === visit.id);
       if (!current || notesKey(current.notes ?? '', current.priorities) !== key) return; // notes changed meanwhile
