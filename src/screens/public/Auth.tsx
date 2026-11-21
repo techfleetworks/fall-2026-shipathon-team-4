@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
-import { verifyPassword } from '../../lib/password';
-import { isServerAuthEnabled, logIn, requestPasswordReset } from '../../lib/auth';
+import { hashPassword, verifyPassword } from '../../lib/password';
+import { isServerAuthEnabled, logIn, requestPasswordReset, signUp } from '../../lib/auth';
 import { fetchMyAppData } from '../../lib/demoApi';
 import { restoreBackupAfterLogin } from '../../lib/sync';
 import { SITE } from '../../lib/siteMode';
@@ -14,9 +14,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /**
  * P7 · Sign up / Log in — tabs swap on one page.
  *
- * Create account asks only for a first name: it sets up a profile on this
- * device (no email or password) and continues to onboarding.
- * Log in still uses email and password (Supabase, per ADR-001, when configured).
+ * LOCAL-ONLY MVP: there is no server yet, so "Create free account" sets up a
+ * profile on this device and continues to onboarding. The password is checked
+ * for length but never stored. Real auth (Supabase, per ADR-001) replaces this.
  */
 export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const navigate = useNavigate();
@@ -26,11 +26,13 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
   const loadDemo = useApp((s) => s.loadDemo);
   const [busy, setBusy] = useState(false);
   const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   // Demo site: "Log in as Theo" on the start page fills in his login (ADR-016, team option A).
   const [params] = useSearchParams();
   const theo = SITE.mode === 'demo' && params.get('as') === 'theo' ? SITE.demoLogin : undefined;
   const [email, setEmail] = useState(theo?.email ?? '');
   const [password, setPassword] = useState(theo?.password ?? '');
+  const [confirm, setConfirm] = useState('');
   const [showReset, setShowReset] = useState(params.get('reset') === '1');
   const [resetMsg, setResetMsg] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
@@ -54,34 +56,31 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
 
   const switchTo = (m: 'signup' | 'login') => {
     setError(null);
+    setConfirm('');
     setShowReset(false);
     navigate(`/${m}`, { replace: true });
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    // Create account: first name only, kept on this device.
-    if (mode === 'signup') {
-      if (!firstName.trim()) return setError('Enter your first name.');
-      if (hasAccount) {
-        return setError('There’s already an account on this device. Log in instead, or delete that account from Settings first.');
-      }
-      return navigate('/welcome', { state: { firstName: firstName.trim() } });
-    }
-
     const em = email.trim().toLowerCase();
+    if (mode === 'signup' && !firstName.trim()) return setError('Enter your first name.');
+    if (mode === 'signup' && !lastName.trim()) return setError('Enter your last name.');
     if (!EMAIL_RE.test(em)) return setError('Enter a valid email address.');
     if (password.length < 8) return setError('Use at least 8 characters for your password.');
+    if (mode === 'signup' && password !== confirm) return setError('Those passwords don’t match. Type the same password in both fields.');
 
     // Sign-in server (Supabase, ADR-001) when it's set up; otherwise the on-device version below.
     if (isServerAuthEnabled()) {
       setBusy(true);
-      const result = await logIn({ email: em, password });
+      const result = mode === 'signup'
+        ? await signUp({ email: em, password, firstName: firstName.trim(), lastName: lastName.trim() })
+        : await logIn({ email: em, password });
       setBusy(false);
       if (result.status === 'error' || result.status === 'confirm-email') return setError(result.message);
       if (result.status !== 'ok') return setError('Sign-in isn’t available right now. Please try again.');
       // Theo (the shared demo account): load his record from the server and go straight in (ADR-010).
-      {
+      if (mode === 'login') {
         const mine = await fetchMyAppData();
         if (mine?.isDemoAccount) {
           loadDemo(mine.data);
@@ -90,21 +89,30 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
         }
       }
       // This device already has this person's app data: just sign in.
-      if (profile?.onboarded && profile.email === em) {
+      if (mode === 'login' && profile?.onboarded && profile.email === em) {
         signIn();
         return navigate('/home', { replace: true });
       }
       // A device with no account data yet, and they backed up on another device: restore it (Visit store, ADR-019).
       // Never when someone else's data is on this device, so two people's records are never mixed.
-      if (!profile?.onboarded && (await restoreBackupAfterLogin())) {
+      if (mode === 'login' && !profile?.onboarded && (await restoreBackupAfterLogin())) {
         useApp.getState().updateProfile({ email: em });
         signIn();
         return navigate('/home', { replace: true });
       }
-      // A device without their data yet: finish setup here (consent is asked on every device).
-      return navigate('/welcome', { state: { email: em, firstName: result.user.firstName, lastName: result.user.lastName } });
+      // New account, or a device without their data yet: finish setup here (consent is asked on every device).
+      return navigate('/welcome', { state: { email: em, firstName: result.user.firstName || firstName.trim(), lastName: result.user.lastName || lastName.trim() } });
     }
 
+    if (mode === 'signup') {
+      if (hasAccount) {
+        return setError('There’s already an account on this device. Log in instead, or delete that account from Settings first.');
+      }
+      setBusy(true);
+      const passwordHash = await hashPassword(password);
+      setBusy(false);
+      return navigate('/welcome', { state: { email: em, firstName: firstName.trim(), lastName: lastName.trim(), passwordHash } });
+    }
     // Log in: only accounts set up on this device exist in this version.
     const notFound = 'That email and password don’t match an account on this device. Accounts don’t sync between devices yet.';
     if (!profile?.onboarded || (profile.email && profile.email !== em)) return setError(notFound);
@@ -139,13 +147,17 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             </div>
 
             {mode === 'signup' && (
-              <div className="field">
-                <label htmlFor="first">First Name</label>
-                <input id="first" className="input" autoComplete="given-name" placeholder="John" value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)} aria-invalid={!!error && !firstName.trim()} />
-              </div>
+              <>
+                <div className="field">
+                  <label htmlFor="first">First Name</label>
+                  <input id="first" className="input" autoComplete="given-name" placeholder="John" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label htmlFor="last">Last Name</label>
+                  <input id="last" className="input" autoComplete="family-name" placeholder="Doe" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </div>
+              </>
             )}
-            {mode === 'login' && (<>
             <div className="field">
               <label htmlFor="email">Email</label>
               <input id="email" className="input" type="email" autoComplete="email" placeholder="you@email.com"
@@ -153,13 +165,15 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>
-              <input id="password" className="input" type="password" autoComplete="current-password"
+              <input id="password" className="input" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 value={password} onChange={(e) => setPassword(e.target.value)} />
-              <button type="button" className="btn btn--link auth-forgot" aria-expanded={showReset} aria-controls="reset-note" onClick={() => setShowReset((v) => !v)}>
-                Forgot your password?
-              </button>
+              {mode === 'login' && (
+                <button type="button" className="btn btn--link auth-forgot" aria-expanded={showReset} aria-controls="reset-note" onClick={() => setShowReset((v) => !v)}>
+                  Forgot your password?
+                </button>
+              )}
             </div>
-            {showReset && (canReset ? (
+            {mode === 'login' && showReset && (canReset ? (
               <div id="reset-note" className="stack-sm">
                 <p className="form-note" style={{ margin: 0 }}>We’ll email you a link to choose a new password. Use the email you signed up with, above.</p>
                 <button type="button" className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => void sendReset()} disabled={resetBusy} aria-busy={resetBusy}>
@@ -172,10 +186,16 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
                 Password reset isn’t available in this version yet. If you can’t remember your password, you’ll need to create a new account.
               </p>
             ))}
-            {params.get('reset') === 'done' && (
+            {mode === 'login' && params.get('reset') === 'done' && (
               <p className="form-note" role="status">Your password was changed. Log in with your new password.</p>
             )}
-            </>)}
+            {mode === 'signup' && (
+              <div className="field">
+                <label htmlFor="confirm">Confirm Password</label>
+                <input id="confirm" className="input" type="password" autoComplete="new-password"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-invalid={!!error && !!confirm && confirm !== password} />
+              </div>
+            )}
             {error && <p className="form-error" role="alert">{error}</p>}
 
             <button type="submit" disabled={busy} className="btn btn--lg btn--block btn--primary">
@@ -184,7 +204,7 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
             <p className="form-note">
               By continuing you agree to the <Link to="/legal/terms">Terms</Link> and <Link to="/legal/privacy">Privacy policy</Link>.
             </p>
-            {(mode === 'signup' || !isServerAuthEnabled()) && <p className="form-note">This version keeps your data on this device only.</p>}
+            {!isServerAuthEnabled() && <p className="form-note">This version keeps your data on this device only.</p>}
           </form>
         </section>
       </main>

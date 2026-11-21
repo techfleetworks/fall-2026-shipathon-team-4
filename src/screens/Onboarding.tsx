@@ -27,10 +27,10 @@ export function Onboarding() {
   const fromSignup = useLocation().state as { email?: string; firstName?: string; lastName?: string; passwordHash?: { salt: string; hash: string } } | null;
 
   useEffect(() => {
-    if (fromSignup && (fromSignup.email !== ob.email || fromSignup.firstName !== ob.firstName)) {
+    if (fromSignup?.email && fromSignup.email !== ob.email) {
       ob.set({ email: fromSignup.email, firstName: fromSignup.firstName, lastName: fromSignup.lastName, passwordHash: fromSignup.passwordHash });
     }
-  }, [fromSignup?.email, fromSignup?.firstName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fromSignup?.email]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     window.scrollTo(0, 0);
