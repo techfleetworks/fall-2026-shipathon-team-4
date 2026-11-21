@@ -13,6 +13,7 @@ import { SCRIPTS, type Script } from '../../data/scripts.js';
 import { sameConcern } from '../caseView/caseView.js';
 import { hasCrisisLanguage } from '../safety.js';
 import { matchSymptoms } from '../translate.js';
+import { straightQuotes } from '../text.js';
 
 export interface Cue {
   /** The playbook script id (one cue per script per visit). */
@@ -84,7 +85,7 @@ export function detectCues(texts: readonly string[], ctx: CueContext): CueResult
   for (const text of texts) {
     for (const t of TRIGGERS) {
       if (found.some((c) => c.id === t.scriptId) || ctx.dismissed?.includes(t.scriptId)) continue;
-      const m = t.pattern.exec(text);
+      const m = t.pattern.exec(straightQuotes(text));
       if (!m) continue;
       const script = SCRIPTS.find((s): s is Script => s.id === t.scriptId);
       if (!script) continue;

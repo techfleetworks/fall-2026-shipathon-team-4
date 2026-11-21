@@ -7,6 +7,7 @@
  */
 // .js extensions: this file also runs on the server (Node ES modules need them); Vite and TypeScript map them to .ts.
 import { hasCrisisLanguage } from '../safety.js';
+import { straightQuotes } from '../text.js';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
   MAX_TRANSCRIPT_CHARS,
@@ -45,9 +46,9 @@ function fail<T>(code: IntakeErrorCode): IntakeResult<T> {
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 
-/** Drop a leading BOM, normalize line endings to LF, remove control characters, trim. */
+/** Drop a leading BOM, normalize line endings to LF, remove control characters, straighten smart quotes, trim. */
 export function normalizeTranscript(raw: string): string {
-  return raw.replace(/^﻿/, '').replace(/\r\n?/g, '\n').replace(CONTROL_CHARS, '').trim();
+  return straightQuotes(raw).replace(/^﻿/, '').replace(/\r\n?/g, '\n').replace(CONTROL_CHARS, '').trim();
 }
 
 /** Validate untrusted input as transcript text. Returns the cleaned text on success. */
