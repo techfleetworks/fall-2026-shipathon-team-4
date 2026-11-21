@@ -59,7 +59,7 @@ export function Faq() {
             ))}
           </div>
         ) : (
-          <p className="muted">No questions match “{query}”. <Link to="/help-now">Need to talk? Call or text 988.</Link></p>
+          <p className="muted">No questions match “{query}”. <Link to="/help-now">Need immediate help? Call or text 988.</Link></p>
         )}
       </main>
     </PublicLayout>

@@ -40,6 +40,8 @@ body {
 }
 button, input, textarea, select { font: inherit; color: inherit; }
 a { color: var(--primary); }
+/* A link inside a sentence: always drawn in the link colour, even if a browser or extension restyles links. */
+.inline-link { color: var(--primary) !important; -webkit-text-fill-color: var(--primary); visibility: visible !important; opacity: 1 !important; text-decoration: underline; text-underline-offset: 2px; font-weight: 500; }
 h1, h2, h3 { margin: 0; line-height: 1.2; letter-spacing: -0.01em; }
 h1 { font-size: 1.6rem; font-weight: 700; }
 h2 { font-size: 1.15rem; font-weight: 700; }
@@ -102,14 +104,8 @@ p { margin: 0; }
 .tab.active .tab__icon { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 .tab.active { font-weight: 600; }
 
-.helpbar {
-  background: var(--surface); border-top: 1px solid var(--line-soft);
-  text-align: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-}
-/* Same look as the header's "Need to talk?" link: terracotta, underlined, one line. */
-.helpbar { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.helpbar a { color: var(--danger); font-weight: 500; font-size: 0.95rem; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.helpbar a:hover { color: #8f3824; }
+/* App bottom bar: looks like the public footer (.pub-footer); only the bottom safe area is added for phones. */
+.pub-footer.helpbar { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
 .prepared {
   background: var(--surface); border-top: 1px solid var(--line-soft);
   text-align: center; padding: 12px 16px; font-weight: 500; font-size: 0.92rem;
@@ -569,6 +565,9 @@ select.select:disabled { cursor: default; opacity: 0.6; }
 .tabs--links a:hover { color: var(--ink); }
 .tabs--links a[aria-current='page'] { color: var(--primary); border-bottom-color: var(--primary); }
 
+/* Before / At / After the visit: a little larger than other tabs. */
+.tabs--stage a { font-size: 1.15rem; }
+
 .subtabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
 .subtabs a {
   flex: none; padding: 9px 16px; border-radius: 10px; border: 1.5px solid var(--line-card); background: var(--surface);
@@ -684,11 +683,19 @@ a.tasks__item:hover { border-color: var(--primary); }
 .priority-add { align-self: flex-start; font-weight: 600; padding: 8px 4px; }
 .b5-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 20px; align-items: stretch; }
 .b5-grid .checklist__row { padding: 10px 0; }
-.breath-start { align-self: flex-end; min-width: 80px; }
+button.breath-ring { font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+button.breath-ring:hover { background: var(--primary-tint); }
+button.breath-ring:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
 .f3-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: stretch; }
 .f3-steps { min-height: 480px; }
 .f3-action { flex: none; min-width: 136px; justify-content: center; }
 .f3-steps .found li { padding: 16px 0; }
+/* Small status labels as plain bold text, no border or background ("Updated Nov 18", "From your notes"). */
+.b3-updated { font-weight: 700; color: var(--primary); white-space: nowrap; }
+.f3-title { margin: 0; font-size: 1.35rem; font-weight: 700; color: var(--primary); }
+.f3-step__edit { display: inline-flex; gap: 14px; margin-left: 10px; vertical-align: baseline; }
+.f3-step__edit .link-btn { padding: 2px 0; min-height: 0; font-size: 0.95rem; }
+.f3-step .confirm-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: 10px; }
 .a3-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 24px; align-items: start; }
 .history-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; align-items: stretch; }
 .history-grid .panel { min-height: 420px; }
@@ -776,20 +783,23 @@ a.tasks__item:hover { border-color: var(--primary); }
 .modal__close:hover { background: var(--surface-muted); color: var(--ink); }
 
 /* A1 · Show in the room */
-.room-page { min-height: 100vh; background: var(--surface); display: flex; flex-direction: column; }
+.room-page { min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; }
 .room-head {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
   padding: 12px 32px; border-bottom: 1px solid var(--line-card); position: sticky; top: 0; background: var(--surface); z-index: 2;
 }
 .room-head > :last-child { justify-self: end; }
 .room-head__title { font-weight: 600; font-size: 1.1em; }
+.room-head__back { justify-self: start; font-weight: 600; }
 .room-main { width: 100%; max-width: 1180px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; }
 .room { display: flex; flex-direction: column; gap: 20px; }
 .room__who { font-size: 1.6em; }
 .room__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: stretch; }
 .room__grid--one { grid-template-columns: 1fr; }
 .room__side { display: flex; flex-direction: column; gap: 16px; }
-.room__card { border: 1px solid var(--line-card); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px; }
+/* A1: "Record this visit" sits at the bottom right of the right column. */
+.room__action { margin-top: auto; display: flex; justify-content: flex-end; padding-top: 8px; }
+.room__card { background: var(--surface); border: 1px solid var(--line-card); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px; }
 .room__card p { margin: 0; line-height: 1.5; }
 .room__card--main { border: 2px solid var(--primary); min-height: 320px; }
 .room__label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.75em; color: var(--ink-muted); }
@@ -827,7 +837,7 @@ a.tasks__item:hover { border-color: var(--primary); }
 }
 @media (max-width: 520px) {
   .tabs--stage { display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; }
-  .tabs--stage a { padding: 10px 4px; font-size: 0.9rem; text-align: center; }
+  .tabs--stage a { padding: 10px 4px; font-size: 0.98rem; text-align: center; }
 }
 
 /* ---------- public refresh (hi-fi P1–P8, Nov 2026) ---------- */
@@ -1024,6 +1034,8 @@ a.tasks__item:hover { border-color: var(--primary); }
 .shared-bar__expires { font-size: 0.95rem; }
 .shared-bar__print { background: var(--surface); border: 2px solid var(--ink); color: var(--ink); min-height: 44px; padding: 8px 20px; border-radius: 10px; font-weight: 600; }
 .shared-bar__print:hover { background: #fff7e8; }
+.shared-bar__back { background: var(--surface); border: 2px solid var(--ink); color: var(--ink); min-height: 44px; padding: 8px 16px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+.shared-bar__back:hover { background: #fff7e8; }
 .shared-main { width: 100%; max-width: 1180px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
 .shared-main .room__who { font-size: 2rem; }
 .shared-main .room__concerns { font-size: 1.25rem; }
@@ -1035,6 +1047,7 @@ a.tasks__item:hover { border-color: var(--primary); }
 
 @media (max-width: 760px) {
   .shared-bar { flex-wrap: wrap; gap: 6px 12px; padding: 10px 16px; }
+  .shared-bar__back { order: 0; min-height: 40px; padding: 6px 14px; }
   .shared-bar__brand { order: 1; }
   .shared-bar__print { order: 2; margin-left: auto; min-height: 40px; padding: 6px 16px; }
   .shared-bar__note { order: 3; flex: 1 1 auto; font-size: 0.88rem; }
@@ -1102,5 +1115,12 @@ a.tasks__item:hover { border-color: var(--primary); }
   border-radius: 10px; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere;
 }
 
+.imported-note { width: 100%; min-height: 0; resize: vertical; }
+
 .reads__head { align-items: center; gap: 12px; }
 .reads__head .link-btn { padding: 4px 0; min-height: 0; }
+
+/* Two fields side by side (Add a visit: Date + Time); stacked on phones. */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-row > .field { min-width: 0; }
+@media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }

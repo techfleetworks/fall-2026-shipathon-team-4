@@ -85,7 +85,7 @@ export function Onboarding() {
         <Link to="/" className="pub-brand" aria-label={`${APP_NAME} home`}><BrandMark /><Brand /></Link>
         <span className="ob-step" aria-live="polite">Step {step} of {TOTAL}</span>
         <div className="pub-actions">
-          <Link to="/help-now" className="pub-help">Need to talk?</Link>
+          <Link to="/help-now" className="pub-help">Need immediate help?</Link>
           {step < TOTAL && (
             <button className="ob-later" onClick={() => navigate('/')} aria-label="Save and finish later">
               <span className="later-long">Save and finish later</span><span className="later-short">Finish later</span>
@@ -109,10 +109,11 @@ export function Onboarding() {
   );
 }
 
-function Actions({ onBack, children }: { onBack?: () => void; children: ReactNode }) {
+function Actions({ onBack, note, children }: { onBack?: () => void; note?: ReactNode; children: ReactNode }) {
   return (
     <div className="ob-actions">
       {onBack && <button className="btn btn--outline" onClick={onBack}>Back</button>}
+      {note}
       <span className="spacer" />
       {children}
     </div>
@@ -129,9 +130,9 @@ function WhatBrings({ onBack, onNext }: { onBack: () => void; onNext: () => void
     const without = reasons.filter((x) => x !== 'Not sure yet');
     set({ reasons: without.includes(r) ? without.filter((x) => x !== r) : [...without, r] });
   };
-  // Symptoms typed in the person's words become chips too (picked). Commas add several at once.
+  // Symptoms typed in the person's words become chips too (picked). Commas, periods or semicolons add several at once.
   const addOwn = () => {
-    const typed = own.split(',').map((t) => t.trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean)
+    const typed = own.split(/[,.;]+/).map((t) => t.trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean)
       .map((t) => t.charAt(0).toUpperCase() + t.slice(1));
     if (!typed.length) return;
     if (typed.some((t) => hasCrisisLanguage(t))) { setOwn(''); navigate('/help/now'); return; }
@@ -155,7 +156,7 @@ function WhatBrings({ onBack, onNext }: { onBack: () => void; onNext: () => void
       <form onSubmit={(e) => { e.preventDefault(); addOwn(); }}>
         <label htmlFor="own-reason" className="sr-only">Add your own symptom</label>
         <input id="own-reason" className="input" value={own} onChange={(e) => setOwn(e.target.value)}
-          placeholder="Add your own — type a symptom in your words" enterKeyHint="done"
+          placeholder="Add your own: e.g.) lack of appetite, mood swings, feeling disconnected" enterKeyHint="done"
           onBlur={() => { if (own.trim()) addOwn(); }} />
       </form>
       <Actions onBack={onBack}>
@@ -311,6 +312,28 @@ const IMPORT_GROUPS: { kind: ImportedItem['kind']; label: string }[] = [
   { kind: 'pdf', label: 'PDF documents' },
 ];
 
+/** One imported note on the review screen: edit it in place; it saves to the history when you leave the box. */
+function NoteEditor({ item, onSaved }: { item: ImportedItem; onSaved: (label: string) => void }) {
+  const navigate = useNavigate();
+  const saved = useApp((s) => s.evidence.find((e) => e.id === item.id)?.detail) ?? item.label;
+  const updateEvidence = useApp((s) => s.updateEvidence);
+  const [text, setText] = useState(saved);
+  const commit = () => {
+    const t = text.trim();
+    if (!t || t === saved) { setText(saved); return; } // An emptied note keeps its text; delete it with the bin instead.
+    if (hasCrisisLanguage(t)) { setText(saved); navigate('/help/now'); return; }
+    updateEvidence(item.id, { detail: t.slice(0, 4000) });
+    onSaved(t.replace(/\s+/g, ' ').slice(0, 90));
+  };
+  return (
+    <>
+      <label htmlFor={`note-${item.id}`} className="sr-only">Edit note</label>
+      <textarea id={`note-${item.id}`} className="textarea imported-note" rows={Math.min(8, Math.max(2, Math.ceil(text.length / 80)))}
+        value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} />
+    </>
+  );
+}
+
 function ImportNotes({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const { importedItems = [], importReview, set } = useOnboarding();
   const deleteEvidence = useApp((s) => s.deleteEvidence);
@@ -353,7 +376,9 @@ function ImportNotes({ onBack, onNext }: { onBack: () => void; onNext: () => voi
                 </div>
                 {isOpen && (
                   <ul id={`imp-${kind}`} className="imported-group__list">
-                    {items.map((i) => <li key={i.id}>{i.label}</li>)}
+                    {items.map((i) => (kind === 'note'
+                      ? <li key={i.id}><NoteEditor item={i} onSaved={(label) => set({ importedItems: useOnboarding.getState().importedItems.map((x) => (x.id === i.id ? { ...x, label } : x)) })} /></li>
+                      : <li key={i.id}>{i.label}</li>))}
                   </ul>
                 )}
               </div>
@@ -434,7 +459,7 @@ function QuickTry({ onBack, onNext }: { onBack: () => void; onNext: () => void }
             {supported
               ? <button {...toggleProps} className={`talk talk--record${listening ? ' listening' : ''}`}>{listening ? 'Stop' : 'Record'}</button>
               : <button type="button" className="talk talk--record" onClick={() => document.getElementById('try')?.focus()}>Record</button>}
-            <span className="muted">{listening ? 'Listening… press Stop when you’re done' : 'Press to talk/stop, or type below'}</span>
+            <span className="muted">{listening ? 'Listening… press Stop when you’re done' : <>Press to talk/stop, or type below <span className="req" aria-hidden="true">*</span></>}</span>
           </div>
           <label htmlFor="try" className="sr-only">Type what’s been hard</label>
           <textarea id="try" className="textarea" value={text} onChange={(e) => { setText(e.target.value); setEdits({}); }}
@@ -476,7 +501,7 @@ function QuickTry({ onBack, onNext }: { onBack: () => void; onNext: () => void }
         </section>
       </div>
 
-      <Actions onBack={onBack}>
+      <Actions onBack={onBack} note={<span className="small"><span className="req" aria-hidden="true">*</span> required</span>}>
         {/* Nothing typed: just move on (this step is optional). Otherwise save it as the first entry. */}
         <button className="btn btn--primary" onClick={() => (text.trim() ? save() : onNext())}>Continue</button>
       </Actions>
@@ -489,8 +514,14 @@ function NextVisit({ onBack, onFinish }: { onBack: () => void; onFinish: (withVi
   const navigate = useNavigate();
   const { visitDate, visitTime, clinician, clinicianEmail, affiliation, specialty, otherSpecialty, reason, set } = useOnboarding();
   const [emailError, setEmailError] = useState(false);
-  const when = visitDate ? `${visitDate}T${visitTime || '09:00'}` : '';
+  // Only today or later can be picked: this is a visit that's coming up.
+  const today = todayISO();
+  const isPast = !!visitDate && visitDate < today;
+  // Required: date, time, who, type of doctor (and what type, for Other) and what the visit is for.
+  const ready = !!visitDate && !!visitTime && !isPast && !!clinician.trim() && !!specialty
+    && (specialty !== 'Other' || !!otherSpecialty?.trim()) && !!reason?.trim();
   const finish = () => {
+    if (!ready) return;
     const em = clinicianEmail?.trim() ?? '';
     if (em && !EMAIL_RE.test(em)) { setEmailError(true); document.getElementById('v-email')?.focus(); return; }
     if (hasCrisisLanguage(reason ?? '', clinician, otherSpecialty ?? '', affiliation ?? '')) { navigate('/help/now'); return; }
@@ -500,15 +531,24 @@ function NextVisit({ onBack, onFinish }: { onBack: () => void; onFinish: (withVi
     <>
       <h1>Do you have an appointment coming up?</h1>
       <p className="pub-sub">We’ll remind you to get ready as the appointment date gets closer.</p>
-      <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); if (visitDate) finish(); }}>
-        <div className="field">
-          <label htmlFor="v-when">Date &amp; Time</label>
-          <input id="v-when" type="datetime-local" className="input" min={`${todayISO()}T00:00`} value={when}
-            onChange={(e) => { const [d, t] = e.target.value.split('T'); set({ visitDate: d ?? '', visitTime: t || undefined }); }} />
+      <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); finish(); }}>
+        <div className="field-row">
+          <div className="field">
+            <label htmlFor="v-date">Date</label>
+            <input id="v-date" type="date" className="input" required min={today} value={visitDate}
+              onChange={(e) => set({ visitDate: e.target.value })}
+              aria-invalid={isPast} aria-describedby={isPast ? 'v-date-err' : undefined} />
+          </div>
+          <div className="field">
+            <label htmlFor="v-time">Time</label>
+            <input id="v-time" type="time" className="input" required value={visitTime ?? ''}
+              onChange={(e) => set({ visitTime: e.target.value || undefined })} />
+          </div>
         </div>
+        {isPast && <span id="v-date-err" className="form-error">Pick today or a later date.</span>}
         <div className="field">
-          <label htmlFor="who">Who are you seeing? <span className="muted">(optional)</span></label>
-          <input id="who" className="input" placeholder="Doctor name" value={clinician} onChange={(e) => set({ clinician: e.target.value })} />
+          <label htmlFor="who">Who are you seeing?</label>
+          <input id="who" className="input" required placeholder="Doctor name" value={clinician} onChange={(e) => set({ clinician: e.target.value })} />
         </div>
         <div className="field">
           <label htmlFor="v-email">Doctor email <span className="muted">(optional)</span></label>
@@ -522,8 +562,8 @@ function NextVisit({ onBack, onFinish }: { onBack: () => void; onFinish: (withVi
           <input id="v-aff" className="input" placeholder="Hospital name" value={affiliation ?? ''} onChange={(e) => set({ affiliation: e.target.value })} />
         </div>
         <div className="field">
-          <label htmlFor="v-type">Type of doctor <span className="muted">(optional)</span></label>
-          <select id="v-type" className="select input" value={specialty ?? ''} onChange={(e) => set({ specialty: e.target.value || undefined })}>
+          <label htmlFor="v-type">Type of doctor</label>
+          <select id="v-type" className="select input" required value={specialty ?? ''} onChange={(e) => set({ specialty: e.target.value || undefined })}>
             <option value="">Choose one</option>
             {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -531,17 +571,17 @@ function NextVisit({ onBack, onFinish }: { onBack: () => void; onFinish: (withVi
         {specialty === 'Other' && (
           <div className="field">
             <label htmlFor="v-type-other">What type of doctor?</label>
-            <input id="v-type-other" className="input" placeholder="e.g., Neurologist" value={otherSpecialty ?? ''} onChange={(e) => set({ otherSpecialty: e.target.value })} />
+            <input id="v-type-other" className="input" required placeholder="e.g., Neurologist" value={otherSpecialty ?? ''} onChange={(e) => set({ otherSpecialty: e.target.value })} />
           </div>
         )}
         <div className="field">
-          <label htmlFor="v-why">What is this visit for? <span className="muted">(optional)</span></label>
-          <input id="v-why" className="input" placeholder="e.g. follow-up on sleep and mood" value={reason ?? ''} onChange={(e) => set({ reason: e.target.value })} />
+          <label htmlFor="v-why">What is this visit for?</label>
+          <input id="v-why" className="input" required placeholder="e.g. follow-up on sleep and mood" value={reason ?? ''} onChange={(e) => set({ reason: e.target.value })} />
         </div>
       </form>
       <Actions onBack={onBack}>
         <button className="link-btn" onClick={() => onFinish(false)}>No visit yet</button>
-        <button className="btn btn--primary" disabled={!visitDate} onClick={finish}>Finish</button>
+        <button className="btn btn--primary" disabled={!ready} onClick={finish}>Finish</button>
       </Actions>
     </>
   );

@@ -36,6 +36,12 @@ describe('POST /api/case-summary', () => {
     expect(caseView.openQuestions[0].clinical).toBe('Outstanding follow-up: Blood test; due Nov 8, no outcome recorded.');
   });
 
+  it('accepts a check-in where "Did you feel heard?" was skipped', async () => {
+    const res = await post({ ...RECORD, visits: [{ ...RECORD.visits[0], checkIn: {} }] });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+  });
+
   it('an empty record is a normal answer that says there is not enough yet (not an error)', async () => {
     const res = await post({});
     expect(res.status).toBe(200);

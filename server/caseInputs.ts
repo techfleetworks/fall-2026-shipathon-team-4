@@ -43,8 +43,11 @@ function strings(v: unknown, max: number): string[] {
   return v.map((x) => str(x, { max: 300 }));
 }
 
-function checkIn(v: unknown): { feltHeard: number } {
-  if (!isObj(v) || !Number.isInteger(v.feltHeard) || (v.feltHeard as number) < 1 || (v.feltHeard as number) > 5) throw new Invalid();
+/** "Did you feel heard?" can be skipped, so a check-in may come without it. When it's there it must be 1–5. */
+function checkIn(v: unknown): { feltHeard?: number } {
+  if (!isObj(v)) throw new Invalid();
+  if (v.feltHeard === undefined) return {};
+  if (!Number.isInteger(v.feltHeard) || (v.feltHeard as number) < 1 || (v.feltHeard as number) > 5) throw new Invalid();
   return { feltHeard: v.feltHeard as number };
 }
 function afterVisit(v: unknown): { talkingPoints: { text: string; raised: boolean }[] } {

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Chip, ChipSelect, useToast } from '../../components/ui';
+import { Chip, ChipSelect, ConfirmButton, useToast } from '../../components/ui';
 import { SCRIPTS } from '../../data/scripts';
 import { addDays, daysUntil, formatShort, todayISO } from '../../lib/dates';
 import { hasCrisisLanguage } from '../../lib/safety';
-import { shareText } from '../../lib/share';
 import { useAfterVisitSummary } from '../../lib/afterVisit/useAfterVisitSummary';
 import { useApp } from '../../lib/store';
 import type { Answer3, CheckIn, FollowUp } from '../../lib/types';
@@ -22,7 +21,6 @@ export function RecapStep() {
   const updateVisit = useApp((s) => s.updateVisit);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
 
   // No recap yet? Quick notes become the starting point. Patient confirms with "Edit".
@@ -38,29 +36,24 @@ export function RecapStep() {
     updateVisit(visit.id, { recap: { doctorSaid, source: visit.recap?.source ?? 'notes', updatedAt: new Date().toISOString() } });
     setEditing(false);
   };
-  const share = async () => {
-    const text = [`Visit summary · ${formatShort(visit.date)}`, '', 'What the doctor said:', ...points.map((p) => `• ${p}`), '', 'My appointment talking points:',
-      ...visit.priorities.map((p) => `${covered.includes(p) ? '✓' : '○'} ${p}`)].join('\n');
-    showToast(await shareText('Visit summary', text));
-  };
 
   return (
     <VisitLayout visit={visit} stage="after" step="">
       <section className="panel panel--accent">
         <div className="row row--between row--wrap">
-          <h1 className="panel-title">What happened at your visit</h1>
-          {source && <span className="pill pill--amber-soft">{source === 'recording' ? '★ From your recording' : source === 'transcript' ? '★ From your transcript' : 'From your notes'}</span>}
+          <h1 className="panel-title">What was said at your visit</h1>
+          {source && <span className="b3-updated">{source === 'recording' ? '★ From your recording' : source === 'transcript' ? '★ From your transcript' : 'From your notes'}</span>}
         </div>
         {editing ? (
           <div className="field">
-            <label htmlFor="said">What the doctor said — one point per line, in plain words</label>
+            <label htmlFor="said">What was said — one point per line, in plain words</label>
             <textarea id="said" className="textarea" style={{ minHeight: 150 }} value={draft} onChange={(e) => setDraft(e.target.value)}
               placeholder={'Your low mood is being taken seriously.\nReferral to a therapist will be sent.'} />
           </div>
         ) : (
           <div className="two-col two-col--plain">
             <div>
-              <span className="eyebrow-soft">What the doctor said</span>
+              <span className="eyebrow-soft">What was said:</span>
               {points.length ? (
                 <ul className="list">{points.map((p, i) => <li key={i}>{p}</li>)}</ul>
               ) : (
@@ -79,7 +72,7 @@ export function RecapStep() {
             </div>
           </div>
         )}
-        <p className="note">Plain words, about a 6th-grade reading level. Check anything unclear with your doctor.</p>
+        <p className="note">Check anything unclear with your doctor.</p>
       </section>
       <div className="b1-footer">
         <span className="spacer" />
@@ -91,12 +84,10 @@ export function RecapStep() {
           ) : (
             <>
               <button className="btn btn--outline" onClick={startEdit}>{points.length ? 'Edit' : 'Type key points'}</button>
-              <button className="btn btn--outline" onClick={share} disabled={!points.length}>Share</button>
               <Link to={`/visits/${visit.id}/after/check-in`} className="btn btn--primary">Continue</Link>
             </>
           )}
       </div>
-      {toast}
     </VisitLayout>
   );
 }
@@ -114,8 +105,9 @@ export function CheckInStep() {
   const [helped, setHelped] = useState<Answer3 | undefined>(visit?.checkIn?.playbookHelped);
   if (!visit) return <Navigate to="/visits" replace />;
 
+  // Every question is optional: nothing answered just moves on (no check-in is saved).
   const save = () => {
-    submit(visit.id, { ...visit.checkIn, feltHeard: heard!, nextStepAgreed: agreed, playbookHelped: helped });
+    if (heard || agreed || helped) submit(visit.id, { ...visit.checkIn, feltHeard: heard, nextStepAgreed: agreed, playbookHelped: helped });
     navigate(`/visits/${visit.id}/after/next-steps`);
   };
 
@@ -141,7 +133,7 @@ export function CheckInStep() {
         </section>
       </div>
       <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn btn--primary" disabled={!heard || !agreed} onClick={save}>Continue</button>
+        <button className="btn btn--primary" onClick={save}>Continue</button>
       </div>
     </VisitLayout>
   );
@@ -161,16 +153,47 @@ function dueLabel(f: FollowUp) {
   return `by ${formatShort(f.dueDate)}`;
 }
 
+/** Edit a next step in place: what and by when. */
+function EditNextStep({ step, onDone }: { step: FollowUp; onDone: () => void }) {
+  const navigate = useNavigate();
+  const update = useApp((s) => s.updateFollowUp);
+  const [what, setWhat] = useState(step.step);
+  const [due, setDue] = useState(step.dueDate);
+  const save = () => {
+    const t = what.trim();
+    if (!t) return;
+    if (hasCrisisLanguage(t)) { navigate('/help/now'); return; }
+    update(step.id, { step: t, dueDate: due || step.dueDate, isVisit: /visit|appointment/i.test(t) });
+    onDone();
+  };
+  return (
+    <form className="add-step" style={{ width: '100%' }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+      <div className="field">
+        <label htmlFor={`edit-what-${step.id}`}>Next step</label>
+        <input id={`edit-what-${step.id}`} className="input" value={what} onChange={(e) => setWhat(e.target.value)} autoFocus />
+      </div>
+      <div className="field">
+        <label htmlFor={`edit-by-${step.id}`}>By when?</label>
+        <input id={`edit-by-${step.id}`} type="date" className="input" value={due} onChange={(e) => setDue(e.target.value)} style={{ maxWidth: 260 }} />
+      </div>
+      <div className="btn-row">
+        <button className="btn btn--outline btn--sm" type="submit" disabled={!what.trim()}>Save</button>
+        <button type="button" className="link-btn" onClick={onDone}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 export function NextStepsStep() {
   const visit = useVisitParam();
   useAfterVisitSummary(visit);
   const navigate = useNavigate();
   const state = useApp();
   const [what, setWhat] = useState('');
-  const [who, setWho] = useState('You');
   const [due, setDue] = useState(addDays(todayISO(), 14));
   const [tip, setTip] = useState('');
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
 
@@ -185,8 +208,8 @@ export function NextStepsStep() {
   const add = () => {
     const t = what.trim();
     if (!t) return;
-    if (hasCrisisLanguage(t, who)) { navigate('/help/now'); return; }
-    state.addFollowUp({ visitId: visit.id, step: t, owner: who.trim() || 'You', dueDate: due, reminder: false, isVisit: /visit|appointment/i.test(t) });
+    if (hasCrisisLanguage(t)) { navigate('/help/now'); return; }
+    state.addFollowUp({ visitId: visit.id, step: t, owner: 'You', dueDate: due, reminder: false, isVisit: /visit|appointment/i.test(t) });
     setWhat('');
     setAdding(false);
   };
@@ -201,14 +224,21 @@ export function NextStepsStep() {
     <VisitLayout visit={visit} stage="after" step="next-steps">
       <div className="f3-grid">
         <section className="panel f3-steps">
-          <span className="eyebrow-soft">Next steps</span>
-          {steps.length === 0 && <p className="muted" style={{ margin: 0 }}>Add what was promised, who does it, and by when.</p>}
+          <h2 className="f3-title">To-Do list</h2>
+          {steps.length === 0 && <p className="muted" style={{ margin: 0 }}>Add what was promised and by when.</p>}
           <ul className="found">
             {steps.map((f) => (
-              <li key={f.id}>
+              editingId === f.id ? (
+                <li key={f.id}><EditNextStep step={f} onDone={() => setEditingId(null)} /></li>
+              ) : (
+              <li key={f.id} className="f3-step">
                 <span style={{ flex: 1 }}>
-                  <strong>{f.step}</strong> · {f.owner ?? 'You'} · {dueLabel(f)}
+                  <strong>{f.step}</strong> · {dueLabel(f)}
                   {f.outcome && <span className="small muted"> · {f.outcome.toLowerCase()}</span>}
+                  <span className="f3-step__edit">
+                    <button type="button" className="link-btn" onClick={() => setEditingId(f.id)} aria-label={`Edit ${f.step}`}>Edit</button>
+                    <ConfirmButton className="link-btn" ariaLabel={`Remove ${f.step}`} question="Remove this next step?" confirmLabel="Remove" onConfirm={() => state.deleteFollowUp(f.id)}>Remove</ConfirmButton>
+                  </span>
                 </span>
                 {f.outcome ? null : f.isVisit ? (
                   <Link className="btn btn--outline btn--sm f3-action" to={`/visits/new?date=${f.dueDate}${visit.clinician ? `&with=${encodeURIComponent(visit.clinician)}` : ''}`}>Add visit</Link>
@@ -218,6 +248,7 @@ export function NextStepsStep() {
                   <button className="btn btn--outline btn--sm f3-action" onClick={() => state.updateFollowUp(f.id, { reminder: true })}>Remind me</button>
                 )}
               </li>
+              )
             ))}
           </ul>
           {adding ? (
@@ -227,15 +258,9 @@ export function NextStepsStep() {
               <input id="what" className="input" value={what} onChange={(e) => setWhat(e.target.value)} placeholder="e.g. Therapist referral" />
               <div className="chips">{STEP_IDEAS.map((s) => <Chip key={s} selected={what === s} onClick={() => setWhat(s)}>{s}</Chip>)}</div>
             </div>
-            <div className="grid-2">
-              <div className="field">
-                <label htmlFor="who">Who does it?</label>
-                <input id="who" className="input" value={who} onChange={(e) => setWho(e.target.value)} placeholder="You, the clinic…" />
-              </div>
-              <div className="field">
-                <label htmlFor="by">By when?</label>
-                <input id="by" type="date" className="input" value={due} onChange={(e) => setDue(e.target.value)} />
-              </div>
+            <div className="field">
+              <label htmlFor="by">By when?</label>
+              <input id="by" type="date" className="input" value={due} onChange={(e) => setDue(e.target.value)} style={{ maxWidth: 260 }} />
             </div>
             <div className="btn-row">
               <button className="btn btn--outline btn--sm" type="submit" disabled={!what.trim()}>Add step</button>

@@ -221,7 +221,7 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
   }
 
   // Felt unheard more than once.
-  const unheard = pastVisits.filter((v) => v.checkIn && v.checkIn.feltHeard <= 2);
+  const unheard = pastVisits.filter((v) => typeof v.checkIn?.feltHeard === 'number' && v.checkIn.feltHeard <= 2);
   if (unheard.length >= 2) {
     const dates = unheard.map((v) => shortDate(v.date)).join(', ');
     patterns.push({
@@ -274,8 +274,8 @@ export function buildCaseView(input: CaseInputs, today: string): CaseViewResult 
     ...(first ? [{ date: first.date, text: `First symptom noted: ${clip(first.detail || first.title, 70)}`, clinical: `Symptom onset: ${inDoctorTerms(first.detail || first.title)}`, ref: { kind: 'evidence', id: first.id } as CaseRef }] : []),
     ...pastVisits.map((v) => ({
       date: v.date,
-      text: `Visit${v.clinician ? ` with ${v.clinician}` : ''}${v.checkIn ? ` · felt heard ${v.checkIn.feltHeard}/5` : ''}`,
-      clinical: `Visit${v.clinician ? ` (${v.clinician})` : ''}${v.checkIn ? `; patient-rated felt heard ${v.checkIn.feltHeard}/5` : ''}`,
+      text: `Visit${v.clinician ? ` with ${v.clinician}` : ''}${v.checkIn?.feltHeard ? ` · felt heard ${v.checkIn.feltHeard}/5` : ''}`,
+      clinical: `Visit${v.clinician ? ` (${v.clinician})` : ''}${v.checkIn?.feltHeard ? `; patient-rated felt heard ${v.checkIn.feltHeard}/5` : ''}`,
       ref: { kind: 'visit', id: v.id } as CaseRef,
     })),
   ]

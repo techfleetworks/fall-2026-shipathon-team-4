@@ -45,3 +45,11 @@ describe('shareEmailDraft', () => {
     expect(e.body).toContain('your patient');
   });
 });
+
+describe('shareEmailDraft with no expiration date', () => {
+  it('says the link works until it is turned off', () => {
+    const e = shareEmailDraft({ ...input, expiresAt: undefined });
+    expect(e.body).toContain('The link keeps working until I turn it off.');
+    expect(e.body).not.toContain('stops working on');
+  });
+});

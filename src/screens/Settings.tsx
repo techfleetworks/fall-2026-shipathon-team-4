@@ -16,9 +16,16 @@ const SECTIONS = [
   { slug: 'profile', label: 'Profile' },
   { slug: 'privacy', label: 'Privacy and data' },
   { slug: 'notifications', label: 'Notifications' },
+  { slug: 'shared', label: 'Shared links' },
   { slug: 'install', label: 'Add to home screen' },
 ] as const;
 type Slug = (typeof SECTIONS)[number]['slug'];
+/** Menu order. "History" isn't a settings page: it opens My history. */
+const MENU: ({ slug: Slug; label: string } | { href: string; label: string })[] = [
+  SECTIONS[0], SECTIONS[1], SECTIONS[2],
+  { href: '/visits/history', label: 'History' },
+  SECTIONS[3], SECTIONS[4],
+];
 
 /**
  * S1–S2 + Profile, Notifications, Install. Left menu on desktop.
@@ -46,7 +53,9 @@ export function Settings() {
       <div className={`settings${isIndex ? ' settings--index' : ''}`}>
         <nav className="settings-nav" aria-label="Settings">
           <h2 className="settings-title">Settings</h2>
-          {SECTIONS.map((s) => (
+          {MENU.map((s) => ('href' in s ? (
+            <Link key={s.href} to={s.href}>{s.label}</Link>
+          ) : (
             <NavLink
               key={s.slug}
               to={`/settings/${s.slug}`}
@@ -54,7 +63,7 @@ export function Settings() {
             >
               {s.label}
             </NavLink>
-          ))}
+          )))}
           <div className="settings-nav__sep" />
           <button className="settings-logout" onClick={logOut}>Log out</button>
         </nav>
@@ -64,6 +73,7 @@ export function Settings() {
           {active === 'profile' && <ProfileSection />}
           {active === 'privacy' && <PrivacySection />}
           {active === 'notifications' && <NotificationsSection />}
+          {active === 'shared' && <SharedLinksSection />}
           {active === 'install' && <InstallSection />}
         </div>
       </div>
@@ -182,8 +192,6 @@ function PrivacySection() {
     state.deleteEverything();
     navigate('/', { replace: true });
   };
-  const [toast, showToast] = useToast();
-  const activeLinks = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
   const consent = state.profile?.consent ?? { saveStory: true, makeSummaries: false, anonymousRatings: false };
   const setConsent = (patch: Partial<typeof consent>) => state.updateProfile({ consent: { ...consent, ...patch } });
 
@@ -219,16 +227,6 @@ function PrivacySection() {
 
       <BackupSync />
 
-      <section className="pcard">
-        <span className="eyebrow">Active share links</span>
-        {activeLinks.length === 0 ? (
-          <p className="muted">No active share links. When you share your brief by link, it will show here so you can stop sharing anytime.</p>
-        ) : (
-          activeLinks.map((l) => <ShareLinkRow key={l.id} link={l} onCopied={showToast} />)
-        )}
-        <Link to="/visits/share" className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }}>Make a share link</Link>
-      </section>
-
       <div className="cols-2">
         <section className="pcard">
           <h2>Download my data</h2>
@@ -257,6 +255,28 @@ function PrivacySection() {
           )}
         </section>
       </div>
+    </>
+  );
+}
+
+/* ---------- Shared links (moved here from Privacy and data) ---------- */
+
+function SharedLinksSection() {
+  const shareLinks = useApp((s) => s.shareLinks);
+  const activeLinks = (shareLinks ?? []).filter((l) => isLinkActive(l));
+  const [toast, showToast] = useToast();
+  return (
+    <>
+      <h1>Shared links</h1>
+      <section className="pcard">
+        <span className="eyebrow">Active share links</span>
+        {activeLinks.length === 0 ? (
+          <p className="muted">No active share links. When you share your brief by link, it will show here so you can stop sharing anytime.</p>
+        ) : (
+          activeLinks.map((l) => <ShareLinkRow key={l.id} link={l} onCopied={showToast} />)
+        )}
+        <Link to="/visits/share" className="btn btn--outline btn--sm" style={{ alignSelf: 'flex-start' }}>Make a share link</Link>
+      </section>
       {toast}
     </>
   );

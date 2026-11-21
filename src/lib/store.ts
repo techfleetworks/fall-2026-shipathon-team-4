@@ -21,6 +21,7 @@ import type {
   MyPlaybook,
   ShareLink,
 } from './types';
+import { NEVER_EXPIRES } from './types';
 import { buildDemoState } from '../data/demo';
 
 export interface MorningPrep {
@@ -53,9 +54,12 @@ interface AppActions {
   updateProfile: (p: Partial<Profile>) => void;
   setNextVisit: (date: string | undefined, clinician?: string, specialty?: string) => void;
   saveSummary: (s: Omit<CaseSummary, 'id' | 'createdAt'>) => void;
+  /** Name how I feel emptied: this visit no longer has a story (the history log keeps its "Story saved" entries). */
+  clearVisitSummaries: (v: Pick<Visit, 'id' | 'createdAt'>) => void;
   /** Returns the new entry's id. */
   addEvidence: (e: Omit<Evidence, 'id'>) => string;
   deleteEvidence: (id: string) => void;
+  updateEvidence: (id: string, patch: Partial<Omit<Evidence, 'id'>>) => void;
   addMedication: (m: Omit<Medication, 'id'>) => void;
   deleteMedication: (id: string) => void;
   addVisit: (v: { date: string; time?: string; clinician?: string; clinicianEmail?: string; affiliation?: string; specialty?: string; reason?: string }) => string;
@@ -76,6 +80,7 @@ interface AppActions {
   savePlaybook: (p: Omit<MyPlaybook, 'id' | 'createdAt'>) => string;
   deletePlaybook: (id: string) => void;
   /** The link lasts `days` from `startsAt` (e.g. the visit date), or from now if that is later or not given. */
+  /** `days` 0 = no expiration date (works until the person stops sharing). */
   createShareLink: (snapshot: ShareLink['snapshot'], days: number, startsAt?: Date) => ShareLink;
   revokeShareLink: (id: string) => void;
   /** Fills the app with Theo's demo data: from the server when given (ADR-010), else the built-in copy. */
@@ -126,9 +131,12 @@ export const useApp = create<AppData & AppActions>()(
             return { visits: s.visits.map((v) => (v === upcoming ? { ...v, date, clinician: clinician ?? v.clinician, specialty: specialty ?? v.specialty } : v)) };
           }
           return {
-            visits: [...s.visits, { id: uid(), date, clinician, specialty, priorities: defaultPriorities(s), askingFor: [] }],
+            visits: [...s.visits, { id: uid(), date, clinician, specialty, priorities: defaultPriorities(s), askingFor: [], stepsDone: [] }],
           };
         }),
+
+      clearVisitSummaries: (v) =>
+        set((s) => ({ summaries: s.summaries.filter((sum) => !isVisitStory(sum, s.visits, v)) })),
 
       saveSummary: (sum) =>
         set((s) => {
@@ -156,6 +164,7 @@ export const useApp = create<AppData & AppActions>()(
         return id;
       },
       deleteEvidence: (id) => set((s) => ({ evidence: s.evidence.filter((e) => e.id !== id) })),
+      updateEvidence: (id, patch) => set((s) => ({ evidence: s.evidence.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
 
       addMedication: (m) =>
         set((s) => ({
@@ -170,7 +179,7 @@ export const useApp = create<AppData & AppActions>()(
       addVisit: (v) => {
         const id = uid();
         // A new visit starts empty: every Before step is still to do.
-        set((s) => ({ visits: [...s.visits, { id, ...v, createdAt: new Date().toISOString(), priorities: [], askingFor: [] }] }));
+        set((s) => ({ visits: [...s.visits, { id, ...v, createdAt: new Date().toISOString(), priorities: [], askingFor: [], stepsDone: [] }] }));
         return id;
       },
       addFollowUp: (f) => set((s) => ({ followUps: [...s.followUps, { ...f, id: uid() }] })),
@@ -184,13 +193,15 @@ export const useApp = create<AppData & AppActions>()(
       submitCheckIn: (visitId, c) =>
         set((s) => {
           const visit = s.visits.find((v) => v.id === visitId);
-          const agreed = c.nextStepAgreed === 'Yes' ? 'next step agreed' : c.nextStepAgreed === 'Not clear' ? 'next step not clear' : 'no next step';
-          const detail = `Felt heard ${c.feltHeard}/5 · ${agreed}`;
-          const already = s.evidence.some((e) => e.type === 'visit' && e.date === visit?.date && e.detail.startsWith('Felt heard'));
+          const agreed = c.nextStepAgreed === 'Yes' ? 'next step agreed' : c.nextStepAgreed === 'Not clear' ? 'next step not clear' : c.nextStepAgreed === 'No' ? 'no next step' : undefined;
+          // Questions can be skipped: only what was answered goes in the history line.
+          const detail = [c.feltHeard ? `Felt heard ${c.feltHeard}/5` : 'Check-in', agreed].filter(Boolean).join(' · ');
+          const isCheckInLine = (d: string) => d.startsWith('Felt heard') || d.startsWith('Check-in');
+          const already = s.evidence.some((e) => e.type === 'visit' && e.date === visit?.date && isCheckInLine(e.detail));
           return {
             visits: s.visits.map((v) => (v.id === visitId ? { ...v, checkIn: c } : v)),
             evidence: already
-              ? s.evidence.map((e) => (e.type === 'visit' && e.date === visit?.date && e.detail.startsWith('Felt heard') ? { ...e, detail } : e))
+              ? s.evidence.map((e) => (e.type === 'visit' && e.date === visit?.date && isCheckInLine(e.detail) ? { ...e, detail } : e))
               : [...s.evidence, { id: uid(), date: visit?.date ?? todayISO(), type: 'visit', title: 'Visit', detail }],
           };
         }),
@@ -246,7 +257,8 @@ export const useApp = create<AppData & AppActions>()(
           id: uid(),
           token,
           createdAt: now.toISOString(),
-          expiresAt: new Date(start.getTime() + days * 86_400_000).toISOString(),
+          expiresAt: days > 0 ? new Date(start.getTime() + days * 86_400_000).toISOString() : NEVER_EXPIRES,
+          ...(days > 0 ? {} : { neverExpires: true }),
           snapshot,
         };
         set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
@@ -314,10 +326,14 @@ export function selectVisitSummary(
 ): CaseSummary | undefined {
   const visits = s.visits ?? [];
   for (let i = s.summaries.length - 1; i >= 0; i--) {
-    const owner = storyOwner(s.summaries[i], visits);
-    if (owner === v.id || (!v.createdAt && owner === undefined)) return s.summaries[i];
+    if (isVisitStory(s.summaries[i], visits, v)) return s.summaries[i];
   }
   return undefined;
+}
+
+function isVisitStory(sum: CaseSummary, visits: Pick<Visit, 'id' | 'createdAt'>[], v: Pick<Visit, 'id' | 'createdAt'>): boolean {
+  const owner = storyOwner(sum, visits);
+  return owner === v.id || (!v.createdAt && owner === undefined);
 }
 
 export const selectHasAccount = (s: Pick<AppData, 'profile'>) => !!s.profile?.onboarded;

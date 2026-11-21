@@ -66,7 +66,7 @@ export function PublicLayout({ children, header = 'full', footer = true, onBack 
         )}
 
         <div className="pub-actions">
-          {header !== 'back' && <Link to="/help-now" className="pub-help">Need to talk?</Link>}
+          {header !== 'back' && <Link to="/help-now" className="pub-help">Need immediate help?</Link>}
           {header === 'full' && (
             <span className="pub-auth btn-row">
               {signedIn ? (
@@ -111,7 +111,7 @@ export function PublicLayout({ children, header = 'full', footer = true, onBack 
           <span className="pub-brand"><BrandMark /><Brand /></span>
           <div className="pub-nav">{NAV.map((n) => <a key={n.to}>{n.label}</a>)}</div>
           <div className="pub-actions">
-            <span className="pub-help">Need to talk?</span>
+            <span className="pub-help">Need immediate help?</span>
             <span className="pub-auth btn-row">
               {signedIn ? <span className="btn btn--primary">Open my app</span> : (
                 <><span className="btn btn--outline">Log in</span><span className="btn btn--primary">Sign up free</span></>
@@ -129,7 +129,7 @@ export function PublicLayout({ children, header = 'full', footer = true, onBack 
           <span className="muted">© {APP_NAME}</span>
           <Link to="/legal/terms">Terms</Link>
           <Link to="/legal/privacy"><span className="foot-long">Privacy policy</span><span className="foot-short">Privacy</span></Link>
-          <Link to="/help-now" className="pub-help"><span className="foot-long">Need to talk? </span>Call or Text 988</Link>
+          <Link to="/help-now" className="pub-help"><span className="foot-long">Need immediate help? </span>Call or Text 988</Link>
         </footer>
       )}
     </div>

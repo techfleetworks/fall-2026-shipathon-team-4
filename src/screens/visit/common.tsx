@@ -23,15 +23,37 @@ export function useVisitParam(): Visit | null {
   return useApp((s) => s.visits.find((v) => v.id === id)) ?? null;
 }
 
+/**
+ * Ticks: Notes for your doctor once it's been opened. The others once the person left the step with an answer
+ * there (Continue, or another step in the left panel), while that answer is still there. Older visits without `stepsDone` tick on the answer alone.
+ */
 export function beforeSteps(s: AppData, v: Visit) {
   const latest = selectVisitSummary(s, v);
+  const answered = {
+    '': !!latest,
+    summary: !!latest,
+    brief: v.priorities.length > 0,
+    today: !!v.prep && (v.prep.checks.length > 0 || prepFeelings(v.prep).length > 0),
+    share: !!v.shared,
+  };
+  const done = (slug: keyof typeof answered) =>
+    !v.stepsDone ? answered[slug] : slug === 'summary' ? v.stepsDone.includes(slug) : v.stepsDone.includes(slug) && answered[slug];
   return [
-    { slug: '', label: 'Name how I feel', done: !!latest },
-    { slug: 'summary', label: 'Notes for your doctor', done: !!latest },
-    { slug: 'brief', label: 'Appointment talking points', done: v.priorities.length > 0 },
-    { slug: 'today', label: 'Before you go', done: !!v.prep && (v.prep.checks.length > 0 || prepFeelings(v.prep).length > 0) },
-    { slug: 'share', label: 'Share', done: !!v.shared },
+    { slug: '', label: 'Name how I feel', done: done('') },
+    { slug: 'summary', label: 'Notes for your doctor', done: done('summary') },
+    { slug: 'brief', label: 'Appointment talking points', done: done('brief') },
+    { slug: 'today', label: 'Before you go', done: done('today') },
+    { slug: 'share', label: 'Share', done: done('share') },
   ];
+}
+
+/** Records a finished Before-the-visit step (see beforeSteps). `done: false` takes it back. */
+export function markStep(visitId: string, slug: string, done = true) {
+  const st = useApp.getState();
+  const v = st.visits.find((x) => x.id === visitId);
+  if (!v) return;
+  const list = (v.stepsDone ?? []).filter((x) => x !== slug);
+  st.updateVisit(visitId, { stepsDone: done ? [...list, slug] : list });
 }
 
 export function afterSteps(s: AppData, v: Visit) {
@@ -57,11 +79,15 @@ interface LayoutProps {
   crumbExtra?: string;
   /** When set, a click on another step calls this (so the page can save first) instead of following the link. */
   onStepNavigate?: (to: string) => void;
+  /** Called when another step in the left panel is clicked (after onStepNavigate, if any), e.g. to tick this step. */
+  onStepLeave?: () => void;
+  /** Per step slug: replaces the saved "done" state, for a page whose answer is being edited right now. */
+  doneOverride?: Partial<Record<string, boolean>>;
   children: ReactNode;
 }
 
 /** Visits › date · doctor, then Before / At / After tabs, then the step list + content. */
-export function VisitLayout({ visit, stage, step, crumbExtra, onStepNavigate, children }: LayoutProps) {
+export function VisitLayout({ visit, stage, step, crumbExtra, onStepNavigate, onStepLeave, doneOverride, children }: LayoutProps) {
   const state = useApp();
   const steps = stage === 'before' ? beforeSteps(state, visit) : stage === 'after' ? afterSteps(state, visit) : null;
   const base = `/visits/${visit.id}`;
@@ -82,8 +108,11 @@ export function VisitLayout({ visit, stage, step, crumbExtra, onStepNavigate, ch
               {steps.map((s, i) => (
                 <li key={s.slug}>
                   <Link to={`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`} aria-current={step === s.slug ? 'step' : undefined}
-                    onClick={onStepNavigate && step !== s.slug ? (e) => { e.preventDefault(); onStepNavigate(`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`); } : undefined}>
-                    {i + 1} · {s.label}{s.done && <span aria-label=" (done)"> ✓</span>}
+                    onClick={step === s.slug ? undefined : (e) => {
+                      onStepLeave?.();
+                      if (onStepNavigate) { e.preventDefault(); onStepNavigate(`${base}/${stage}${s.slug ? `/${s.slug}` : ''}`); }
+                    }}>
+                    {i + 1} · {s.label}{(doneOverride?.[s.slug] ?? s.done) && <span aria-label=" (done)"> ✓</span>}
                   </Link>
                 </li>
               ))}

@@ -32,3 +32,14 @@ describe('createShareLink start date', () => {
     expect(expires).toBeLessThan(before + 60 * DAY + 5_000);
   });
 });
+
+describe('No expiration date', () => {
+  it('stays active until the person stops sharing', async () => {
+    const { isLinkActive } = await import('./store');
+    const link = useApp.getState().createShareLink(snapshot, 0, new Date(Date.now() + 10 * DAY));
+    expect(link.neverExpires).toBe(true);
+    expect(isLinkActive(link, Date.now() + 50 * 365 * DAY)).toBe(true);
+    useApp.getState().revokeShareLink(link.id);
+    expect(isLinkActive(useApp.getState().shareLinks!.find((l) => l.id === link.id)!)).toBe(false);
+  });
+});
