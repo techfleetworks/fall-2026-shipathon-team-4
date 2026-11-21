@@ -165,7 +165,7 @@ function AddVisitDialog() {
         {isPast && <span id="av-date-err" className="form-error">Pick today or a later date.</span>}
         <div className="field">
           <label htmlFor="av-who">Who are you seeing?</label>
-          <input id="av-who" className="input" required value={who} onChange={(e) => setWho(e.target.value)} placeholder="Dr. name or clinic" />
+          <input id="av-who" className="input" required value={who} onChange={(e) => setWho(e.target.value)} placeholder="Doctor name" />
         </div>
         <div className="field">
           <label htmlFor="av-email">Doctor email <span className="muted">(optional)</span></label>

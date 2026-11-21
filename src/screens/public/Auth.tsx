@@ -4,7 +4,8 @@ import { PrivacyArt } from '../../components/Art';
 import { PublicLayout } from '../../components/PublicLayout';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { isServerAuthEnabled, logIn, requestPasswordReset, signUp } from '../../lib/auth';
-import { fetchMyAppData } from '../../lib/demoApi';
+import { fetchMyAppData, startDemo } from '../../lib/demoApi';
+import { isDemoLogin } from '../../lib/demoLogin';
 import { restoreBackupAfterLogin } from '../../lib/sync';
 import { SITE } from '../../lib/siteMode';
 import { selectHasAccount, useApp } from '../../lib/store';
@@ -68,6 +69,15 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
     if (mode === 'signup' && !lastName.trim()) return setError('Enter your last name.');
     if (!EMAIL_RE.test(em)) return setError('Enter a valid email address.');
     if (password.length < 8) return setError('Use at least 8 characters for your password.');
+
+    // Demo details (theo@demo.com): open Theo's synthetic demo on this device, on any site.
+    if (isDemoLogin(em, password)) {
+      setBusy(true);
+      await startDemo(loadDemo);
+      setBusy(false);
+      signIn();
+      return navigate('/home', { replace: true });
+    }
     if (mode === 'signup' && password !== confirm) return setError('Those passwords don’t match. Type the same password in both fields.');
 
     // Sign-in server (Supabase, ADR-001) when it's set up; otherwise the on-device version below.
