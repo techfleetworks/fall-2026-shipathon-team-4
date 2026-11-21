@@ -3,6 +3,7 @@ import { formatDate, formatShort, todayISO } from './dates';
 import type { AppData } from './store';
 import { selectLatestSummary, selectUpcomingVisit } from './store';
 import type { BriefSnapshot, Visit } from './types';
+import { matchesWalkthrough, WALKTHROUGH_ASKING_FOR, WALKTHROUGH_REPORTED } from './walkthrough';
 
 /** Everything the doctor view shows, as plain data — used live and frozen into share links. */
 export function buildBriefSnapshot(
@@ -16,6 +17,8 @@ export function buildBriefSnapshot(
   const field = (k: string) => latest?.fields.find((f) => f.key === k);
   const tried = field('tried');
   const severity = field('severity');
+  // Demo walkthrough story: a short summary under Reported, and a set Asking for (lib/walkthrough).
+  const walkthrough = !!latest && matchesWalkthrough(latest.opening);
   const impact = severity && severity.clinical !== 'Not discussed'
     ? /affects daily function \(([^)]+)\)/i.exec(severity.clinical)?.[1]
     : undefined;
@@ -27,10 +30,14 @@ export function buildBriefSnapshot(
     patient: [s.profile?.name, s.profile?.age].filter(Boolean).join(', ') || undefined,
     impact: include.summary && impact ? impact.charAt(0).toUpperCase() + impact.slice(1) : undefined,
     priorities: include.talkingPoints ? (visit?.priorities ?? []) : [],
-    symptoms: !include.summary ? [] : ['symptoms', 'onset', 'frequency', 'severity', 'triggers']
-      .map(field)
-      .filter((f): f is NonNullable<typeof f> => !!f && f.clinical !== 'Not discussed')
-      .map((f) => ({ label: f.key === 'symptoms' ? 'Reported' : f.label, clinical: f.clinical, quote: f.quote })),
+    symptoms: !include.summary ? [] : [
+      ...(walkthrough ? [{ label: 'Reported', clinical: WALKTHROUGH_REPORTED }] : []),
+      ...(walkthrough ? ['onset', 'frequency', 'severity', 'triggers'] : ['symptoms', 'onset', 'frequency', 'severity', 'triggers'])
+        .map(field)
+        .filter((f): f is NonNullable<typeof f> => !!f && f.clinical !== 'Not discussed')
+        // Onset is called "Began" everywhere in the app now.
+        .map((f) => ({ label: f.key === 'symptoms' ? 'Reported' : f.key === 'onset' ? 'Began' : f.label, clinical: f.clinical, quote: f.quote })),
+    ],
     tried: !include.summary
       ? ''
       : tried && tried.clinical !== 'Not discussed'
@@ -41,7 +48,7 @@ export function buildBriefSnapshot(
       .filter((e) => e.type !== 'note')
       .slice(-5)
       .map((e) => ({ date: e.date, detail: e.detail })),
-    askingFor: include.talkingPoints ? (visit?.askingFor ?? []) : [],
+    askingFor: !include.talkingPoints ? [] : visit?.askingFor?.length ? visit.askingFor : walkthrough ? [WALKTHROUGH_ASKING_FOR] : [],
     demo: s.demoMode,
     ...(include.caseHistory ? caseFor(s) : {}),
   };

@@ -9,6 +9,7 @@ import { fitToOnePage } from '../../lib/onePageBrief';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { useApp } from '../../lib/store';
 import { useLiveTranscript } from '../../lib/transcript/useLiveTranscript';
+import { matchesVisitNotes, matchesVisitRecording, VISIT_SAID } from '../../lib/walkthrough';
 import { detectCues } from '../../lib/cues/cues';
 import { DoctorBriefBody } from '../Brief';
 import { Modal, useVisitParam, VisitLayout } from './common';
@@ -102,13 +103,6 @@ export function AtVisit() {
                 ))}
               </div>
             )}
-            {/* Talking points that seem to have come up (ADR-022). A suggestion only: the person ticks it. */}
-            {heard.coveredSuggestions.map((p) => (
-              <p key={p} className="small" style={{ margin: 0 }}>
-                Sounds like “{p}” came up.{' '}
-                <button className="link-btn" onClick={() => updateVisit(visit.id, { covered: [...covered, p] })}>Mark covered</button>
-              </p>
-            ))}
           </section>
 
           {/* Be-believed cues (ADR-022): what was heard, and the matching tip line to say. Newest first. */}
@@ -127,7 +121,7 @@ export function AtVisit() {
               <p style={{ margin: 0 }}>You haven’t asked about “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
             </section>
           )}
-          <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline">Visit’s over — go to visit summary</Link>
+          <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline" onClick={() => finishWalkthrough(visit.id)}>Visit’s over — go to visit summary</Link>
         </div>
 
         <aside className="panel playbook-now" aria-labelledby="pb-now">
@@ -228,6 +222,22 @@ function CaptureBar({ visitId, running, setRunning, onStop }: { visitId: string;
       <button className="btn btn--danger btn--sm" onClick={stop}>Stop</button>
     </div>
   );
+}
+
+/**
+ * Demo walkthrough (lib/walkthrough): when the recorded conversation or the quick notes are the walkthrough's, "Visit's
+ * over" fills Visit summary › What was said with its fixed lines, marked "From your recording". Works for a visit dated
+ * in the future too (demo only). Unsaved live words are cleared so they aren't added to the recap later.
+ */
+function finishWalkthrough(visitId: string) {
+  const v = useApp.getState().visits.find((x) => x.id === visitId);
+  if (!v) return;
+  const heard = [...(v.live?.segments ?? []), ...(v.recap?.source === 'recording' ? v.recap.doctorSaid : [])].join(' ');
+  if (!matchesVisitRecording(heard) && !matchesVisitNotes(v.notes ?? '')) return;
+  useApp.getState().updateVisit(visitId, {
+    recap: { doctorSaid: [...VISIT_SAID], source: 'recording', updatedAt: new Date().toISOString() },
+    live: undefined,
+  });
 }
 
 /* ======================================================================

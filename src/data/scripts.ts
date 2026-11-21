@@ -32,6 +32,15 @@ export const SCRIPTS: Script[] = [
     why: 'Asking for it to be written down is calm and fair, and it makes sure what you reported is recorded.',
   },
   {
+    id: 'dismiss-stress',
+    category: 'Being dismissed',
+    situation: 'If you hear “it’s just stress”',
+    text: 'I know stress can be part of it. This has gone on for [how long] and I’ve missed [work or school] because of it. Could we look at what else might be going on?',
+    doctor: 'It sounds like it’s just stress.',
+    firmer: 'Stress may be part of it, but this has lasted [how long] and it’s affecting my work. I’d like us to check for other causes and note in my chart what I reported.',
+    why: 'Saying how long it’s lasted and what it’s cost you shows it’s more than everyday stress.',
+  },
+  {
     id: 'dismiss-depression',
     category: 'Being dismissed',
     situation: 'If you hear “it’s probably the depression”',

@@ -12,11 +12,12 @@ import { parseNotes, type FoundItem, type FoundKind } from '../../lib/importPars
 import { draftPlaybook } from '../../lib/playbook';
 import { suggestQuestions } from '../../lib/questions/suggest';
 import { hasCrisisLanguage } from '../../lib/safety';
-import { isLinkActive, selectLatestSummary, selectVisitSummary, useApp, useDraft } from '../../lib/store';
+import { isLinkActive, isLinkForVisit, selectLatestSummary, selectVisitSummary, useApp, useDraft } from '../../lib/store';
 import { requestPrepSummary } from '../../lib/api';
 import { translateStoryGuarded } from '../../lib/engine';
 import { storyDraftHasCrisis } from '../../lib/guardrails/enforce';
 import { applyOverrides, useServerSummary } from '../../lib/useServerSummary';
+import { applyWalkthrough, matchesWalkthrough, WALKTHROUGH_NOTICED } from '../../lib/walkthrough';
 import type { FieldKey, ShareLink, StoryDraft, Visit } from '../../lib/types';
 import { Priorities, suggestionsFrom } from '../Brief';
 import { ShareLinkRow, linkUrl } from '../Visits';
@@ -79,11 +80,20 @@ export function NameHowIFeel() {
   // Unchanged saved story: show what was saved while a fresh preview isn't available.
   const unchanged = !!saved && draft.opening.trim() === saved.opening
     && Object.entries(draft.overrides ?? {}).every(([k, v]) => saved.fields.find((f) => f.key === k)?.clinical === v);
-  const showSaved = unchanged && preview.status !== 'ok';
-  const fields = useMemo(
-    () => (showSaved && saved ? saved.fields : applyOverrides(preview.fields, draft.overrides)),
-    [showSaved, saved, preview.fields, draft.overrides],
-  );
+  // Demo walkthrough: once recording stops on the walkthrough script, the panel shows its fixed lines (lib/walkthrough).
+  const walkthrough = !listening && matchesWalkthrough(text);
+  const showSaved = unchanged && preview.status !== 'ok' && !walkthrough;
+  const fields = useMemo(() => {
+    if (showSaved && saved) return saved.fields;
+    // No server answer yet: the walkthrough still fills in, using this device's engine for Main concerns.
+    let base = preview.fields;
+    if (walkthrough && preview.status !== 'ok') {
+      const { overrides: _o, ...engineInput } = draft;
+      const local = translateStoryGuarded(engineInput as StoryDraft);
+      if (local.status === 'ok') base = local.fields;
+    }
+    return applyOverrides(walkthrough ? applyWalkthrough(base, text) : base, draft.overrides);
+  }, [showSaved, saved, preview.fields, preview.status, walkthrough, text, draft]);
   // Crisis anywhere in the story (any question, any rewrite), not just the question on screen.
   const anyCrisis = storyDraftHasCrisis(draft);
   const [saving, setSaving] = useState(false);
@@ -112,6 +122,10 @@ export function NameHowIFeel() {
       leftBySave.current = true;
       return navigate(to);
     }
+    // Walkthrough: Notes for your doctor also shows what others have noticed (unless the person already wrote something).
+    if (matchesWalkthrough(current.opening) && !useApp.getState().visits.find((v) => v.id === visit.id)?.othersNoticed?.trim()) {
+      useApp.getState().updateVisit(visit.id, { othersNoticed: WALKTHROUGH_NOTICED });
+    }
     // Nothing changed since it was saved: don't save a second copy.
     if (unchanged) { leftBySave.current = true; markStep(visit.id, ''); reset(); return navigate(to); }
     setSaving(true);
@@ -127,7 +141,7 @@ export function NameHowIFeel() {
     if (out.status === 'rejected' && out.error.code === 'EMPTY_STORY') return navigate(to);
     if (out.status === 'blocked') return setSaveError(out.message);
     if (out.status === 'rejected') return setSaveError(out.error.message);
-    saveSummary({ opening: current.opening.trim(), fields: applyOverrides(out.fields, overrides), visitId: visit.id });
+    saveSummary({ opening: current.opening.trim(), fields: applyOverrides(applyWalkthrough(out.fields, current.opening), overrides), visitId: visit.id });
     // Ticked by Continue or by moving to another step in the left panel.
     markStep(visit.id, '');
     leftBySave.current = true;
@@ -176,7 +190,7 @@ export function NameHowIFeel() {
         <section className="panel panel--accent" aria-labelledby="reads">
           <span id="reads" className="eyebrow-soft">Your doctor reads · updates as you go</span>
           {!showSaved && preview.status === 'loading' && <p className="note" role="status">Updating…</p>}
-          {!showSaved && (preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
+          {!showSaved && !walkthrough && (preview.status === 'unavailable' || preview.status === 'blocked') && <p className="note" role="status">{preview.message}</p>}
           <div className="kv">
             {fields.map((f) => (
               <div key={f.key} className="kv__row">
@@ -351,12 +365,12 @@ const BEGAN_MIN = () => addDays(todayISO(), -36_525);
    B3 · Doctor summary
    ====================================================================== */
 
+// Main concerns isn't shown on this screen ("In your words" already says it).
 const SUMMARY_ROWS: { key: FieldKey; label: string }[] = [
-  { key: 'symptoms', label: 'Main concerns' },
   { key: 'onset', label: 'How long' },
   { key: 'frequency', label: 'How often' },
   { key: 'severity', label: 'How bad' },
-  { key: 'triggers', label: 'Better or worse with' },
+  { key: 'triggers', label: 'Triggers' },
 ];
 
 export function DoctorSummaryStep() {
@@ -510,7 +524,9 @@ export function TalkingPointsStep() {
   const latest = selectVisitSummary(state, visit);
   const update = (patch: Partial<Visit>) => state.updateVisit(visit.id, patch);
   const attached = visit.scripts ?? [];
-  const suggested = [...new Set([...attached, ...draftPlaybook(state).scriptIds, ...state.savedScripts])].slice(0, 6);
+  // Walkthrough story: "If you hear 'it's just stress'" leads the list.
+  const lead = latest && matchesWalkthrough(latest.opening) ? ['dismiss-stress'] : [];
+  const suggested = [...new Set([...lead, ...attached, ...draftPlaybook(state).scriptIds, ...state.savedScripts])].slice(0, 6);
 
   return (
     <VisitLayout visit={visit} stage="before" step="brief" onStepLeave={() => { if (visit.priorities.length) markStep(visit.id, 'brief'); }}>
@@ -756,11 +772,12 @@ export function ShareStep() {
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [toast, showToast] = useToast();
   if (!visit) return <Navigate to="/visits" replace />;
-  const active = (state.shareLinks ?? []).filter((l) => isLinkActive(l));
+  // Only links made for this visit (Settings › Shared links lists them all).
+  const active = (state.shareLinks ?? []).filter((l) => isLinkActive(l) && isLinkForVisit(l, visit));
 
   const create = async () => {
     // The countdown starts on the visit date (or today, if the visit has passed).
-    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum, caseHistory: false }), days, parseISO(visit.date));
+    const l = state.createShareLink(buildBriefSnapshot(state, visit, { talkingPoints: tp, summary: sum, caseHistory: false }), days, parseISO(visit.date), visit.id);
     state.updateVisit(visit.id, { shared: true });
     setMade(l);
     setCopied(false);

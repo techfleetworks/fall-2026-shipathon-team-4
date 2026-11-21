@@ -81,7 +81,7 @@ interface AppActions {
   deletePlaybook: (id: string) => void;
   /** The link lasts `days` from `startsAt` (e.g. the visit date), or from now if that is later or not given. */
   /** `days` 0 = no expiration date (works until the person stops sharing). */
-  createShareLink: (snapshot: ShareLink['snapshot'], days: number, startsAt?: Date) => ShareLink;
+  createShareLink: (snapshot: ShareLink['snapshot'], days: number, startsAt?: Date, visitId?: string) => ShareLink;
   revokeShareLink: (id: string) => void;
   /** Fills the app with Theo's demo data: from the server when given (ADR-010), else the built-in copy. */
   loadDemo: (data?: Partial<AppData>) => void;
@@ -248,7 +248,7 @@ export const useApp = create<AppData & AppActions>()(
       },
       deletePlaybook: (id) => set((s) => ({ myPlaybooks: (s.myPlaybooks ?? []).filter((p) => p.id !== id) })),
 
-      createShareLink: (snapshot, days, startsAt) => {
+      createShareLink: (snapshot, days, startsAt, visitId) => {
         const now = new Date();
         const start = startsAt && startsAt.getTime() > now.getTime() ? startsAt : now;
         const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -259,6 +259,7 @@ export const useApp = create<AppData & AppActions>()(
           createdAt: now.toISOString(),
           expiresAt: days > 0 ? new Date(start.getTime() + days * 86_400_000).toISOString() : NEVER_EXPIRES,
           ...(days > 0 ? {} : { neverExpires: true }),
+          ...(visitId ? { visitId } : {}),
           snapshot,
         };
         set((s) => ({ shareLinks: [...(s.shareLinks ?? []), link] }));
@@ -359,6 +360,11 @@ export function selectLatestSummary(s: Pick<AppData, 'summaries'>): CaseSummary 
 
 export function isLinkActive(l: ShareLink, now = Date.now()): boolean {
   return !l.revokedAt && new Date(l.expiresAt).getTime() > now;
+}
+
+/** Was this link made for this visit? Older links (no visitId) go by the visit date in their snapshot. */
+export function isLinkForVisit(l: ShareLink, v: Pick<Visit, 'id' | 'date'>): boolean {
+  return l.visitId ? l.visitId === v.id : l.snapshot?.visitDate === v.date;
 }
 
 export function selectDueFollowUps(s: Pick<AppData, 'followUps'>): FollowUp[] {

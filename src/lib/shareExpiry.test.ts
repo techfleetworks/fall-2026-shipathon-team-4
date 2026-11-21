@@ -43,3 +43,19 @@ describe('No expiration date', () => {
     expect(isLinkActive(useApp.getState().shareLinks!.find((l) => l.id === link.id)!)).toBe(false);
   });
 });
+
+describe('Share step lists only this visit’s links', () => {
+  it('a new link remembers its visit', async () => {
+    const { isLinkForVisit } = await import('./store');
+    const link = useApp.getState().createShareLink(snapshot, 30, undefined, 'v1');
+    expect(link.visitId).toBe('v1');
+    expect(isLinkForVisit(link, { id: 'v1', date: '2026-12-20' })).toBe(true);
+    expect(isLinkForVisit(link, { id: 'v2', date: '2026-12-20' })).toBe(false);
+  });
+  it('an older link (no visit saved) goes by its visit date', async () => {
+    const { isLinkForVisit } = await import('./store');
+    const old = { id: 'x', token: 't', createdAt: '', expiresAt: '', snapshot: { visitDate: '2026-12-20' } } as unknown as ShareLink;
+    expect(isLinkForVisit(old, { id: 'v2', date: '2026-12-20' })).toBe(true);
+    expect(isLinkForVisit(old, { id: 'v3', date: '2026-11-21' })).toBe(false);
+  });
+});

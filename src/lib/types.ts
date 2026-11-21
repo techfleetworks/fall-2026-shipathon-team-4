@@ -225,6 +225,8 @@ export interface ShareLink {
   expiresAt: string; // ISO. Far in the future (NEVER_EXPIRES) when the person chose "No expiration date".
   /** "No expiration date": works until the person stops sharing. */
   neverExpires?: boolean;
+  /** The visit it was made for (Share step). Missing on older links: matched by the visit date in the snapshot. */
+  visitId?: string;
   revokedAt?: string;
   snapshot: BriefSnapshot;
 }

@@ -153,18 +153,18 @@ function AddVisitDialog() {
       <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); if (ready) save(); }}>
         <div className="field-row">
           <div className="field">
-            <label htmlFor="av-date">Date</label>
+            <label htmlFor="av-date">Date <span className="req" aria-hidden="true">*</span></label>
             <input id="av-date" type="date" className="input" required min={today} value={date} onChange={(e) => setDate(e.target.value)}
               aria-invalid={isPast} aria-describedby={isPast ? 'av-date-err' : undefined} />
           </div>
           <div className="field">
-            <label htmlFor="av-time">Time</label>
+            <label htmlFor="av-time">Time <span className="req" aria-hidden="true">*</span></label>
             <input id="av-time" type="time" className="input" required value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
         </div>
         {isPast && <span id="av-date-err" className="form-error">Pick today or a later date.</span>}
         <div className="field">
-          <label htmlFor="av-who">Who are you seeing?</label>
+          <label htmlFor="av-who">Who are you seeing? <span className="req" aria-hidden="true">*</span></label>
           <input id="av-who" className="input" required value={who} onChange={(e) => setWho(e.target.value)} placeholder="Doctor name" />
         </div>
         <div className="field">
@@ -179,7 +179,7 @@ function AddVisitDialog() {
           <input id="av-aff" className="input" value={affiliation} onChange={(e) => setAffiliation(e.target.value)} placeholder="e.g., Riverside Medical Center" />
         </div>
         <div className="field">
-          <label htmlFor="av-type">Type of doctor</label>
+          <label htmlFor="av-type">Type of doctor <span className="req" aria-hidden="true">*</span></label>
           <select id="av-type" className="select input" required value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
             <option value="">Choose one</option>
             {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -187,12 +187,12 @@ function AddVisitDialog() {
         </div>
         {specialty === 'Other' && (
           <div className="field">
-            <label htmlFor="av-type-other">What type of doctor?</label>
+            <label htmlFor="av-type-other">What type of doctor? <span className="req" aria-hidden="true">*</span></label>
             <input id="av-type-other" className="input" required value={otherSpecialty} onChange={(e) => setOtherSpecialty(e.target.value)} placeholder="e.g., Neurologist" autoFocus />
           </div>
         )}
         <div className="field">
-          <label htmlFor="av-why">What’s this visit for?</label>
+          <label htmlFor="av-why">What’s this visit for? <span className="req" aria-hidden="true">*</span></label>
           <input id="av-why" className="input" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., follow-up on sleep and mood" />
         </div>
         <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
