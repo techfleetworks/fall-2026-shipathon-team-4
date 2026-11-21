@@ -52,11 +52,15 @@ export function Shell({ header, tabs = false, footer = 'help', wide = false, chi
   );
 }
 
+/** Bottom bar in the app: the same footer as the public pages, kept pinned so the 988 link is always in reach. */
 export function HelpBar() {
   return (
-    <div className="helpbar">
-      <Link to="/help-now">Need help now? Call or text 988</Link>
-    </div>
+    <footer className="pub-footer helpbar">
+      <span className="muted">© {APP_NAME}</span>
+      <Link to="/legal/terms">Terms</Link>
+      <Link to="/legal/privacy"><span className="foot-long">Privacy policy</span><span className="foot-short">Privacy</span></Link>
+      <Link to="/help-now" className="pub-help"><span className="foot-long">Need immediate help? </span>Call or Text 988</Link>
+    </footer>
   );
 }
 
@@ -108,7 +112,7 @@ function SubHeader({ title, back, onBack, backLabel, exit, right }: Extract<Head
 
 /** Every page shows the crisis line in the header (site map). */
 function AccountLink() {
-  return <Link to="/help-now" className="header-link header-988" aria-label="Need to talk? Call or text 988">Need to talk?</Link>;
+  return <Link to="/help-now" className="header-link header-988" aria-label="Need immediate help? Call or text 988">Need immediate help?</Link>;
 }
 
 function AccountMenu() {
@@ -128,8 +132,8 @@ function AccountMenu() {
   const initial = profile.name?.[0]?.toUpperCase() ?? '';
   return (
     <div ref={ref} className="header__end">
-      <Link to="/help-now" className="pub-help pub-help--app" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
-      <Link to="/help-now" className="header-link header-988 header-988--phone" aria-label="Need to talk? Call or text 988">Need to talk?</Link>
+      <Link to="/help-now" className="pub-help pub-help--app" aria-label="Need immediate help? Call or text 988">Need immediate help?</Link>
+      <Link to="/help-now" className="header-link header-988 header-988--phone" aria-label="Need immediate help? Call or text 988">Need immediate help?</Link>
       <button className="btn btn--outline header-logout" onClick={() => { signOut(); navigate('/', { replace: true }); }}>Log out</button>
       <button className="avatar" aria-label="Account menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {initial}

@@ -17,7 +17,7 @@ export function buildCaseSnapshot(record: CaseInputs, today: string): CaseSnapsh
     .filter((x) => x.date <= today)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-MAX_SNAPSHOT_VISITS)
-    .map((x) => ({ date: x.date, ...(x.clinician ? { clinician: x.clinician } : {}), ...(x.checkIn ? { feltHeard: x.checkIn.feltHeard } : {}) }));
+    .map((x) => ({ date: x.date, ...(x.clinician ? { clinician: x.clinician } : {}), ...(x.checkIn?.feltHeard ? { feltHeard: x.checkIn.feltHeard } : {}) }));
   return {
     presenting: v.clinical.presenting,
     course: v.clinical.course,

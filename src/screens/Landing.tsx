@@ -19,7 +19,7 @@ export function Landing() {
         <section className="hero-grid">
           <div className="hero-copy">
             <span className="pill pill--amber">Free for patients</span>
-            <h1 className="hero">Be heard and be taken seriously.</h1>
+            <h1 className="hero">Be Prepared, Be clear and Be Taken Seriously.</h1>
             <p className="pub-lead">
               Tell us how you feel. We’ll help your doctor understand.<br />
               Built for people living with mood disorders.

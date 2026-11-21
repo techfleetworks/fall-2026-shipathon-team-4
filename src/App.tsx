@@ -110,7 +110,9 @@ export function App() {
           <Route path="/visits/:id/before/brief" element={<TalkingPointsStep />} />
           <Route path="/visits/:id/before/today" element={<PrepStep />} />
           <Route path="/visits/:id/before/share" element={<ShareStep />} />
-          <Route path="/visits/:id/at" element={<AtVisit />} />
+          {/* At the visit opens on A1 (show in the room); "Record this visit" goes on to the recording screen. */}
+          <Route path="/visits/:id/at" element={<ShowInRoom />} />
+          <Route path="/visits/:id/at/live" element={<AtVisit />} />
           <Route path="/visits/:id/at/room" element={<ShowInRoom />} />
           <Route path="/visits/:id/after" element={<RecapStep />} />
           <Route path="/visits/:id/after/check-in" element={<CheckInStep />} />

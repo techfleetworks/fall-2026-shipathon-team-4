@@ -202,7 +202,8 @@ export function Auth({ mode }: { mode: 'signup' | 'login' }) {
               {mode === 'signup' ? 'Create free account' : 'Log in'}
             </button>
             <p className="form-note">
-              By continuing you agree to the <Link to="/legal/terms">Terms</Link> and <Link to="/legal/privacy">Privacy policy</Link>.
+              {/* Each piece in its own element, links forced visible: translators and extensions can't blank them. */}
+              <span>By continuing you agree to the </span><Link to="/legal/terms" className="inline-link">Terms</Link><span> and </span><Link to="/legal/privacy" className="inline-link">Privacy policy</Link><span>.</span>
             </p>
             {!isServerAuthEnabled() && <p className="form-note">This version keeps your data on this device only.</p>}
           </form>

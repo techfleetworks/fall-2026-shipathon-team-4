@@ -12,7 +12,8 @@ export interface ShareEmailInput {
   recipient: { name: string; role: string; email: string };
   /** Full link, e.g. https://app.example/shared/<token>. */
   url: string;
-  expiresAt: string;
+  /** Missing: the link has no expiration date. */
+  expiresAt?: string;
   /** Patient's first name, if they want it in the email. */
   patientName?: string;
 }
@@ -29,7 +30,7 @@ export interface ShareEmail {
 const oneLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 
 export function shareEmailDraft({ recipient, url, expiresAt, patientName }: ShareEmailInput): ShareEmail {
-  const when = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const when = expiresAt ? new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : undefined;
   const greeting = recipient.name.trim() ? `Hello ${oneLine(recipient.name)},` : 'Hello,';
   const from = patientName?.trim() ? oneLine(patientName) : 'your patient';
   const subject = `One-page summary for my upcoming visit${patientName?.trim() ? ` (${oneLine(patientName)})` : ''}`;
@@ -39,7 +40,7 @@ export function shareEmailDraft({ recipient, url, expiresAt, patientName }: Shar
     `I prepared a one-page summary of what I want to discuss at my next visit. You can read it here (no sign-in needed):`,
     oneLine(url),
     '',
-    `The link stops working on ${when}, or sooner if I turn it off.`,
+    when ? `The link stops working on ${when}, or sooner if I turn it off.` : 'The link keeps working until I turn it off.',
     '',
     'Thank you,',
     from,

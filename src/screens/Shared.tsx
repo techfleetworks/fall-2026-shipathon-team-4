@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { APP_NAME } from '../lib/brand';
 import { listenForStop } from '../lib/shareSignal';
 import { watchSharedBrief } from '../lib/sharedBriefWatch';
@@ -58,7 +58,7 @@ export function SharedBrief() {
   if (!shown) {
     return (
       <div className="shared">
-        <header className="shared-bar"><span className="shared-bar__brand">{APP_NAME}</span></header>
+        <header className="shared-bar"><BackFromPreview /><span className="shared-bar__brand">{APP_NAME}</span></header>
         <main id="main" className="shared-gone">
           <div className="shared-gone__icon" aria-hidden="true">
             <svg viewBox="0 0 48 48" width="56" height="56">
@@ -79,6 +79,7 @@ export function SharedBrief() {
   return (
     <div className="shared">
       <header className="shared-bar">
+        <BackFromPreview />
         <span className="shared-bar__brand">{APP_NAME}</span>
         <span className="shared-bar__note">Shared by the patient · patient-reported</span>
         <span className="shared-bar__expires">{expiresIn(shown.expiresAt)}</span>
@@ -90,6 +91,18 @@ export function SharedBrief() {
       </main>
     </div>
   );
+}
+
+/**
+ * The patient previewing their own link (Preview on Share or Settings): a way back to where they were.
+ * Never shown to a doctor who opens the link, since they don't arrive from inside the app.
+ */
+function BackFromPreview() {
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  const navigate = useNavigate();
+  if (!from || !from.startsWith('/')) return null;
+  const label = from.includes('/before/share') ? 'Back to Share' : from.startsWith('/settings') ? 'Back to Settings' : 'Back';
+  return <button className="btn shared-bar__back no-print" onClick={() => navigate(from)}>← {label}</button>;
 }
 
 /** While a server link is opening, or if the server can't be reached. Same bar as the shared view. */
@@ -106,6 +119,7 @@ function SharedStatus({ text, busy = false }: { text: string; busy?: boolean }) 
 
 /** "Link expires in 6 days" / "in 5 hours" / "in under an hour". */
 function expiresIn(iso: string): string {
+  if (iso >= '9999') return 'No expiration date';
   const ms = new Date(iso).getTime() - Date.now();
   const hours = Math.floor(ms / 3_600_000);
   if (hours < 1) return 'Link expires in under an hour';

@@ -6,8 +6,6 @@ import { SCRIPTS } from '../../data/scripts';
 import { APP_NAME } from '../../lib/brand';
 import { buildBriefSnapshot } from '../../lib/brief';
 import { fitToOnePage } from '../../lib/onePageBrief';
-import { planAfterVisitUpdate } from '../../lib/afterVisit/useAfterVisitSummary';
-import { playDemoVisit } from '../../lib/demoApi';
 import { hasCrisisLanguage } from '../../lib/safety';
 import { useApp } from '../../lib/store';
 import { useLiveTranscript } from '../../lib/transcript/useLiveTranscript';
@@ -23,7 +21,6 @@ export function AtVisit() {
   const visit = useVisitParam();
   const updateVisit = useApp((s) => s.updateVisit);
   const savedScripts = useApp((s) => s.savedScripts);
-  const demoMode = useApp((s) => s.demoMode);
   const [iAgree, setIAgree] = useState(false);
   const [docAgrees, setDocAgrees] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -73,12 +70,24 @@ export function AtVisit() {
             />
           )}
 
-          <div className="btn-row">
-            <Link to={`/visits/${visit.id}/at/room`} className="btn btn--primary">Show in the room</Link>
-            {visit.recording === 'declined' && (
+          {visit.recording === 'declined' && (
+            <div className="btn-row">
               <button className="link-btn" onClick={() => updateVisit(visit.id, { recording: undefined })}>Record after all?</button>
+            </div>
+          )}
+
+          <section className="panel">
+            <label htmlFor="qn" className="eyebrow-soft">Quick notes</label>
+            <textarea id="qn" className="textarea" style={{ minHeight: 90 }} value={visit.notes ?? ''}
+              onChange={(e) => updateVisit(visit.id, { notes: e.target.value })}
+              placeholder="Jot what the doctor says — it feeds your visit summary." />
+            {notesCrisis && (
+              <div className="pcard pcard--crisis" role="alert" style={{ padding: 14 }}>
+                <span className="small"><strong>If you need support right now,</strong> you can call or text 988 any time.</span>
+                <Link to="/help-now" className="btn btn--sm btn--danger" style={{ alignSelf: 'flex-start' }}>Get help now</Link>
+              </div>
             )}
-          </div>
+          </section>
 
           <section className="panel panel--accent">
             <span className="eyebrow-soft">Your appointment talking points · tick as you cover them</span>
@@ -102,19 +111,6 @@ export function AtVisit() {
             ))}
           </section>
 
-          <section className="panel">
-            <label htmlFor="qn" className="eyebrow-soft">Quick notes</label>
-            <textarea id="qn" className="textarea" style={{ minHeight: 90 }} value={visit.notes ?? ''}
-              onChange={(e) => updateVisit(visit.id, { notes: e.target.value })}
-              placeholder="Jot what the doctor says — it feeds your visit summary." />
-            {notesCrisis && (
-              <div className="pcard pcard--crisis" role="alert" style={{ padding: 14 }}>
-                <span className="small"><strong>If you need support right now,</strong> you can call or text 988 any time.</span>
-                <Link to="/help-now" className="btn btn--sm btn--danger" style={{ alignSelf: 'flex-start' }}>Get help now</Link>
-              </div>
-            )}
-          </section>
-
           {/* Be-believed cues (ADR-022): what was heard, and the matching tip line to say. Newest first. */}
           {heard.cues.map((c) => (
             <section key={c.id} className="panel panel--muted" aria-live="polite">
@@ -131,8 +127,6 @@ export function AtVisit() {
               <p style={{ margin: 0 }}>You haven’t asked about “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
             </section>
           )}
-          {/* Demo only (ADR-015): play Theo's sample visit as if it had been recorded, then see the After step fill in. */}
-          {demoMode && <PlayTheosVisit visitId={visit.id} />}
           <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline">Visit’s over — go to visit summary</Link>
         </div>
 
@@ -155,10 +149,10 @@ export function AtVisit() {
 
       {!decided && (
         <Modal title="Record this visit for your visit summary?" onClose={() => updateVisit(visit.id, { recording: 'declined' })}>
-          <p className="muted" style={{ margin: 0 }}>We’ll turn the conversation into a plain recap for you. Recording only starts when both of you agree.</p>
+          <p className="muted" style={{ margin: 0 }}>By law, we must get permission from everyone involved before we begin recording. We’ll turn the conversation into a plain recap for you. Recording only starts when both of you agree.</p>
           <div className="checklist">
             <div className="checklist__row"><Checkbox checked={iAgree} onChange={setIAgree}><strong>I agree</strong> to record this visit</Checkbox></div>
-            <div className="checklist__row"><Checkbox checked={docAgrees} onChange={setDocAgrees}><strong>My doctor agrees</strong> (ask them, then tick)</Checkbox></div>
+            <div className="checklist__row"><Checkbox checked={docAgrees} onChange={setDocAgrees}><strong>My doctor agrees</strong> (ask your doctor before you check this)</Checkbox></div>
           </div>
           <p className="note">Ask: “Is it OK if I record this so I remember what we discuss?” You can stop anytime. No audio is kept — only the words, turned into your visit summary.</p>
           <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
@@ -236,44 +230,6 @@ function CaptureBar({ visitId, running, setRunning, onStop }: { visitId: string;
   );
 }
 
-/** Demo only: "Play Theo's visit" loads the synthetic transcript as if this visit was recorded. Never shown to real users. */
-function PlayTheosVisit({ visitId }: { visitId: string }) {
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const play = async () => {
-    setBusy(true);
-    setMessage(null);
-    const state = useApp.getState();
-    const visit = state.visits.find((v) => v.id === visitId);
-    const summary = visit ? await playDemoVisit(visit.priorities) : undefined;
-    setBusy(false);
-    if (!visit || !summary) return setMessage('We couldn’t reach the server to play the sample visit. Please try again.');
-    const fresh = useApp.getState();
-    const current = fresh.visits.find((v) => v.id === visitId) ?? visit;
-    const { visitPatch, newFollowUps } = planAfterVisitUpdate(
-      { ...current, recap: undefined },
-      summary,
-      { visits: fresh.visits, followUps: fresh.followUps },
-      { source: 'transcript' },
-    );
-    fresh.updateVisit(visitId, { ...visitPatch, recording: 'agreed' });
-    for (const f of newFollowUps) fresh.addFollowUp(f);
-    navigate(`/visits/${visitId}/after`);
-  };
-  return (
-    <section className="panel panel--muted">
-      <span className="eyebrow-soft">Demo</span>
-      <p style={{ margin: 0 }}>See what happens after a visit: play Theo’s visit with Dr. Lane as if it was recorded.</p>
-      <button className="btn btn--primary btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => void play()} disabled={busy} aria-busy={busy}>
-        {busy ? 'Playing Theo’s visit…' : '▶ Play Theo’s visit (sample recording)'}
-      </button>
-      {message && <p className="small" role="alert" style={{ margin: 0 }}>{message}</p>}
-      <span className="small muted">Synthetic — illustrative only, not medical advice.</span>
-    </section>
-  );
-}
-
 /* ======================================================================
    A1 · Show in the room — full screen, no app chrome, adjustable text
    ====================================================================== */
@@ -297,15 +253,18 @@ export function ShowInRoom() {
   // Download PDF: the same one-page rules as shared links (src/lib/onePageBrief.ts); case history prints as page 2.
   const brief = buildBriefSnapshot(state, visit, include);
   const shown = printMode ? fitToOnePage(brief).brief : brief;
-  const exit = () => {
+  // Back: to wherever they came from (e.g. Visits or Before the visit); Before the visit if opened directly.
+  const back = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
-    navigate(printMode ? `/visits/${visit.id}/before/share` : `/visits/${visit.id}/at`);
+    if (printMode) return navigate(`/visits/${visit.id}/before/share`);
+    if ((window.history.state as { idx?: number } | null)?.idx) return navigate(-1);
+    navigate(`/visits/${visit.id}/before`);
   };
 
   return (
     <div className="room-page" style={{ fontSize: `${scale}rem` }}>
       <header className="room-head no-print">
-        <button className="link-btn" onClick={exit}>× Exit full screen</button>
+        <button className="link-btn room-head__back" onClick={back}>← Back</button>
         <span className="room-head__title">For your doctor</span>
         <div className="row">
           <button className="btn btn--outline btn--sm" aria-label="Smaller text" onClick={() => setScale((s) => Math.max(0.9, +(s - 0.15).toFixed(2)))}>A−</button>
@@ -313,7 +272,9 @@ export function ShowInRoom() {
         </div>
       </header>
       <main id="main" className="room-main">
-        <DoctorBriefBody data={shown} />
+        <DoctorBriefBody data={shown} action={printMode ? undefined : (
+          <Link to={`/visits/${visit.id}/at/live`} className="btn btn--primary no-print">Record this visit</Link>
+        )} />
         <p className="small muted">Prepared by the patient with {APP_NAME}. Patient-reported.</p>
       </main>
     </div>

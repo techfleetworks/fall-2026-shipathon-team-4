@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SharedCase } from '../components/SharedCase';
 import { IconDown, IconGrip, IconTrash, IconUp } from '../components/Icons';
@@ -89,7 +89,7 @@ export function Priorities({ visit, update, suggestions, bare = false, addLink =
 }
 
 /** The doctor-facing brief (A1 layout). Shared by "Show in the room", the PDF and shared links. */
-export function DoctorBriefBody({ data, showTimeline = false, variant = 'room' }: { data: BriefSnapshot; showTimeline?: boolean; variant?: 'room' | 'shared' }) {
+export function DoctorBriefBody({ data, showTimeline = false, variant = 'room', action }: { data: BriefSnapshot; showTimeline?: boolean; variant?: 'room' | 'shared'; /** A1: a button at the bottom of the right column ("Record this visit"). */ action?: ReactNode }) {
   const showSummary = data.includeSummary !== false;
   const showPoints = data.includeTalkingPoints !== false;
   const shared = variant === 'shared';
@@ -111,7 +111,7 @@ export function DoctorBriefBody({ data, showTimeline = false, variant = 'room' }
             <section className="room__card">
               <span className="room__label">Symptoms</span>
               {data.symptoms.map((f) => (
-                <p key={f.label}><strong>{f.label}:</strong> {f.clinical}{f.quote && !shared && <span className="kv__quote" style={{ display: 'block' }}>In my words: “{f.quote}”</span>}</p>
+                <p key={f.label}><strong>{f.label}:</strong> {f.clinical}</p>
               ))}
             </section>
           )}
@@ -133,6 +133,7 @@ export function DoctorBriefBody({ data, showTimeline = false, variant = 'room' }
               <p><strong>{data.askingFor.length ? data.askingFor.join(' · ') : 'To discuss together'}</strong></p>
             </section>
           )}
+          {action && <div className="room__action">{action}</div>}
           {showTimeline && showSummary && data.timeline.length > 0 && (
             <section className="room__card">
               <span className="room__label">Timeline</span>

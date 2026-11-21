@@ -78,7 +78,8 @@ export type NextStepKind = 'Referral' | 'Test' | 'Med change' | 'Follow-up visit
 export type Answer3 = 'Yes' | 'A little' | 'No';
 
 export interface CheckIn {
-  feltHeard: number; // 1-5
+  /** 1-5. Missing when the person skipped it (every check-in question is optional). */
+  feltHeard?: number;
   /** F2: "Was a next step agreed?" */
   nextStepAgreed?: 'Yes' | 'Not clear' | 'No';
   /** F2: "Did a tip help?" */
@@ -133,6 +134,11 @@ export interface Visit {
   prep?: { feelings?: string[]; feeling?: string; checks: string[]; extra: string[] };
   /** B6: marked once a link or PDF was made. */
   shared?: boolean;
+  /**
+   * Before-the-visit steps (by slug) the person finished: Continue clicked with an answer, or (Notes for your
+   * doctor) opened. Visits made before this existed don't have it and use the older answer-only ticks.
+   */
+  stepsDone?: string[];
   /** A2: consent outcome for capturing the visit. */
   recording?: 'agreed' | 'declined';
   /** A3: talking points ticked as covered. */
@@ -216,10 +222,15 @@ export interface ShareLink {
   id: string;
   token: string;
   createdAt: string; // ISO
-  expiresAt: string; // ISO
+  expiresAt: string; // ISO. Far in the future (NEVER_EXPIRES) when the person chose "No expiration date".
+  /** "No expiration date": works until the person stops sharing. */
+  neverExpires?: boolean;
   revokedAt?: string;
   snapshot: BriefSnapshot;
 }
+
+/** expiresAt for a link with no expiration date, so every "still active?" check keeps working unchanged. */
+export const NEVER_EXPIRES = '9999-12-31T23:59:59.000Z';
 
 export interface StoryDraft {
   opening: string;
