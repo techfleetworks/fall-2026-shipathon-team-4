@@ -675,6 +675,9 @@ a.tasks__item:hover { border-color: var(--primary); }
 .b4-side > .panel { flex: 1; }
 .b4-grid .priority { border: 1px solid var(--line-card); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px; background: var(--surface); }
 .b4-grid .priority .icon-btn { opacity: 0; transition: opacity .15s; }
+/* The whole card is the drag handle. */
+.priority { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.priority--dragging { cursor: grabbing; opacity: 0.6; box-shadow: 0 4px 14px rgba(30, 42, 68, 0.12); }
 .b4-grid .priority:hover .icon-btn, .b4-grid .priority:focus-within .icon-btn { opacity: 1; }
 @media (hover: none) { .b4-grid .priority .icon-btn { opacity: 1; } }
 .b4-head { align-items: flex-start; gap: 12px; }

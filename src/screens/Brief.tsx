@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SharedCase } from '../components/SharedCase';
 import { IconDown, IconGrip, IconTrash, IconUp } from '../components/Icons';
@@ -38,19 +38,59 @@ export function Priorities({ visit, update, suggestions, bare = false, addLink =
   };
   const unused = suggestions.filter((s) => !items.includes(s));
 
+  // Drag from anywhere on a card (not just the grip). Mouse: press and move. Touch: press and hold briefly, then move,
+  // so a normal swipe still scrolls the page. The up/down buttons stay for keyboard and screen-reader users.
+  const listRef = useRef<HTMLOListElement>(null);
+  // `index` follows the card as it moves, so even one fast move lands it in the right place.
+  const press = useRef<{ index: number; x: number; y: number; timer?: number; active: boolean } | null>(null);
+  const startDrag = (i: number) => { if (press.current) press.current.active = true; setDragIndex(i); };
+  const endDrag = () => { if (press.current?.timer) window.clearTimeout(press.current.timer); press.current = null; setDragIndex(null); };
+  const onPointerDown = (e: ReactPointerEvent<HTMLLIElement>, i: number) => {
+    if ((e.target as HTMLElement).closest('button, a, input')) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not every pointer can be captured; dragging still works */ }
+    press.current = { index: i, x: e.clientX, y: e.clientY, active: false };
+    if (e.pointerType !== 'mouse') press.current.timer = window.setTimeout(() => startDrag(i), 250);
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLLIElement>) => {
+    const p = press.current;
+    if (!p) return;
+    const far = Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6;
+    if (!p.active) {
+      if (!far) return;
+      if (e.pointerType === 'mouse') startDrag(p.index);
+      else { endDrag(); return; } // moved before the hold: it's a scroll
+    }
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-priority-index]');
+    const to = over ? Number(over.dataset.priorityIndex) : NaN;
+    const from = p.index;
+    if (Number.isNaN(to) || to === from) return;
+    move(from, to);
+    p.index = to;
+    setDragIndex(to);
+  };
+  // While dragging on a touch screen, stop the page from scrolling under the finger.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const stop = (e: TouchEvent) => { if (press.current?.active) e.preventDefault(); };
+    el.addEventListener('touchmove', stop, { passive: false });
+    return () => el.removeEventListener('touchmove', stop);
+  }, []);
+
   return (
     <section className={bare ? 'stack' : 'card'} aria-label="Talking points">
       {!bare && <h3>Top priorities (drag to reorder)</h3>}
-      <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+      <ol ref={listRef} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {items.map((p, i) => (
           <li
-            key={p + i}
-            className="priority"
-            draggable
-            onDragStart={() => setDragIndex(i)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => { if (dragIndex !== null) move(dragIndex, i); setDragIndex(null); }}
-            style={dragIndex === i ? { opacity: 0.5 } : undefined}
+            // Keyed by the text (not the position), so the card being dragged keeps its place in the page as it moves.
+            key={`${p}#${items.slice(0, i).filter((x) => x === p).length}`}
+            className={`priority${dragIndex === i ? ' priority--dragging' : ''}`}
+            data-priority-index={i}
+            onPointerDown={(e) => onPointerDown(e, i)}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
           >
             <span className="drag-handle" aria-hidden="true"><IconGrip /></span>
             <span className="priority__text"><strong>{i + 1}.</strong> {p}</span>

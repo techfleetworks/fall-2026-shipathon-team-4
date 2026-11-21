@@ -121,7 +121,11 @@ export function AtVisit() {
               <p style={{ margin: 0 }}>You haven’t asked about “{nextUp}” yet. Try: “Before we finish, can we talk about {nextUp.charAt(0).toLowerCase() + nextUp.slice(1)}?”</p>
             </section>
           )}
-          <Link to={`/visits/${visit.id}/after`} className="btn btn--block btn--outline" onClick={() => finishWalkthrough(visit.id)}>Visit’s over — go to visit summary</Link>
+          {/* Same style and place as Continue on the other steps: filled, bottom right. */}
+          <div className="b1-footer" style={{ marginTop: 0 }}>
+            <span className="spacer" />
+            <Link to={`/visits/${visit.id}/after`} className="btn btn--primary" onClick={() => finishWalkthrough(visit.id)}>Visit’s over — go to visit summary</Link>
+          </div>
         </div>
 
         <aside className="panel playbook-now" aria-labelledby="pb-now">
