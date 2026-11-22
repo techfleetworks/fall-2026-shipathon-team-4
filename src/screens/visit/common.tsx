@@ -128,7 +128,7 @@ export function VisitLayout({ visit, stage, step, crumbExtra, onStepNavigate, on
 }
 
 /** Dialog over a dark backdrop (V2, B6, A2). Esc and the backdrop close it. */
-export function Modal({ title, onClose, children, labelledBy = 'modal-title', closeButton = false }: { title: string; onClose: () => void; children: ReactNode; labelledBy?: string; /** Show a × close button in the top right corner. */ closeButton?: boolean }) {
+export function Modal({ title, onClose, children, labelledBy = 'modal-title', closeButton = false, closeOnOutsideClick = true }: { title: string; onClose: () => void; children: ReactNode; labelledBy?: string; /** Show a × close button in the top right corner. */ closeButton?: boolean; /** False: a click outside (e.g. on the scroll bar of a tall form) doesn't close it. */ closeOnOutsideClick?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -145,7 +145,7 @@ export function Modal({ title, onClose, children, labelledBy = 'modal-title', cl
     };
   }, []);
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(e) => closeOnOutsideClick && e.target === e.currentTarget && onClose()}>
       <div ref={ref} className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
         <h2 id={labelledBy} className={closeButton ? 'modal__title--close' : undefined}>{title}</h2>
         {closeButton && <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>×</button>}

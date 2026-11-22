@@ -149,7 +149,8 @@ function AddVisitDialog() {
   };
 
   return (
-    <Modal title="Add a visit" onClose={close}>
+    // Closes only with × or Cancel: on short screens people scroll this form with the scroll bar, outside the box.
+    <Modal title="Add a visit" onClose={close} closeButton closeOnOutsideClick={false}>
       <form className="stack" noValidate onSubmit={(e) => { e.preventDefault(); if (ready) save(); }}>
         <div className="field-row">
           <div className="field">
